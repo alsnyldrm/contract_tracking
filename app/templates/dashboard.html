@@ -1,0 +1,14 @@
+{% extends 'base.html' %}
+{% block page_title %}Dashboard{% endblock %}
+{% block content %}
+<div class="grid grid-5" id="widgetGrid"></div>
+<div class="panel">
+  <h3>Duruma Göre Sözleşmeler</h3>
+  <canvas id="statusChart" height="90"></canvas>
+</div>
+<div class="panel">
+  <h3>En Yakın Bitiş Tarihli 10 Sözleşme</h3>
+  <table class="table" id="nearestTable"><thead><tr><th>Sözleşme</th><th>Bitiş</th><th>Durum</th></tr></thead><tbody></tbody></table>
+</div>
+{% endblock %}
+{% block scripts %}<script src="/static/js/dashboard.js"></script>{% endblock %}

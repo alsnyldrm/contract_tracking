@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+{% block page_title %}Kurumlar{% endblock %}
+{% block content %}
+<div class="toolbar">
+  <input id="q" placeholder="Kurum ara" />
+  {% if user.role.name == 'admin' %}<button class="btn btn-primary" onclick="openInstitutionModal()">Yeni Kurum</button>{% endif %}
+</div>
+<div class="panel">
+  <table class="table" id="institutionTable"><thead><tr><th>Kurum Adı</th><th>Kısa Ad</th><th>Yetkili</th><th>Durum</th><th>İşlem</th></tr></thead><tbody></tbody></table>
+</div>
+<div class="modal" id="institutionModal"><div class="modal-content">
+  <h3>Kurum Kaydı</h3>
+  <input id="i_name" placeholder="Kurum adı" />
+  <input id="i_short_name" placeholder="Kısa ad" />
+  <input id="i_contact_person" placeholder="Yetkili kişi" />
+  <input id="i_contact_email" placeholder="Yetkili e-posta" />
+  <textarea id="i_description" placeholder="Açıklama"></textarea>
+  <div class="modal-actions"><button class="btn" onclick="closeInstitutionModal()">Kapat</button><button class="btn btn-primary" onclick="saveInstitution()">Kaydet</button></div>
+</div></div>
+{% endblock %}
+{% block scripts %}<script src="/static/js/institutions.js"></script>{% endblock %}

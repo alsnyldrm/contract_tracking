@@ -1,0 +1,12 @@
+.env
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.sqlite3
+.pytest_cache/
+.venv/
+venv/
+app/logs/*.log
+data/documents/*
+!data/documents/.gitkeep

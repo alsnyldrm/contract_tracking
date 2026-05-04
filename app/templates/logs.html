@@ -1,0 +1,15 @@
+{% extends 'base.html' %}
+{% block page_title %}Log Yönetimi{% endblock %}
+{% block content %}
+<div class="toolbar">
+  <select id="logType"></select>
+  <select id="logLimit"><option>100</option><option>500</option><option>1000</option></select>
+  <select id="logLevel"><option value="">Seviye (Tümü)</option><option>DEBUG</option><option>INFO</option><option>WARNING</option><option>ERROR</option><option>CRITICAL</option></select>
+  <input id="logSearch" placeholder="Metin ara" />
+  <button class="btn btn-primary" onclick="loadLogs()">Getir</button>
+  <button class="btn" onclick="downloadLog()">Dosya İndir</button>
+  <button class="btn" onclick="exportLogCsv()">CSV Export</button>
+</div>
+<div class="panel" style="max-height:560px;overflow:auto;"><table class="table" id="logTable"><thead><tr><th>Zaman</th><th>Seviye</th><th>Modül</th><th>Mesaj</th><th>Detay</th></tr></thead><tbody></tbody></table></div>
+{% endblock %}
+{% block scripts %}<script src="/static/js/logs.js"></script>{% endblock %}

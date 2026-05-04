@@ -1,0 +1,14 @@
+{% extends 'base.html' %}
+{% block page_title %}Raporlar{% endblock %}
+{% block content %}
+<div class="panel">
+  <h3>Rapor Modülleri</h3>
+  <table class="table" id="reportModuleTable"><thead><tr><th>Rapor</th><th>Durum</th><th>Aksiyon</th></tr></thead><tbody></tbody></table>
+</div>
+<div class="panel">
+  <h3>Rapor Sonuçları</h3>
+  <div class="toolbar"><select id="reportCode"></select><button class="btn btn-primary" onclick="runReport()">Çalıştır</button><button class="btn" onclick="exportReport('pdf')">PDF</button><button class="btn" onclick="exportReport('csv')">CSV</button><button class="btn" onclick="exportReport('xlsx')">Excel</button></div>
+  <table class="table" id="reportTable"><thead></thead><tbody></tbody></table>
+</div>
+{% endblock %}
+{% block scripts %}<script src="/static/js/reports.js"></script>{% endblock %}

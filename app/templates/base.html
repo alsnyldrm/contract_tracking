@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="tr" data-theme="{{ 'dark' if preferences.dark_mode else 'light' }}">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Contract Tracking</title>
+  <link rel="icon" type="image/svg+xml" href="/static/img/favicon.svg" />
+  <link rel="stylesheet" href="/static/css/app.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.min.js"></script>
+  <meta name="csrf-token" content="{{ csrf_token }}" />
+</head>
+<body>
+<div class="app-shell {{ 'sidebar-collapsed' if preferences.sidebar_collapsed else '' }}" id="appShell">
+  <aside class="sidebar" id="sidebar">
+    <div>
+      <div class="brand">
+        <img src="/static/img/logo.svg" alt="Logo" />
+        <div class="brand-text">
+          <h1>Contract Tracking</h1>
+          <p>Sözleşme Yönetimi</p>
+        </div>
+      </div>
+      <nav>
+        <a href="/dashboard" class="nav-link">Dashboard</a>
+        <a href="/institutions" class="nav-link">Kurumlar</a>
+        <a href="/contracts" class="nav-link">Sözleşmeler</a>
+        <a href="/reports" class="nav-link">Raporlar</a>
+        {% if user.role.name == 'admin' %}
+        <a href="/users" class="nav-link">Kullanıcılar ve Roller</a>
+        <a href="/logs" class="nav-link">Log Yönetimi</a>
+        <a href="/settings" class="nav-link">Ayarlar</a>
+        {% endif %}
+        <a href="/profile" class="nav-link">Profil</a>
+      </nav>
+    </div>
+    <div class="sidebar-footer">
+      <div>{{ user.full_name }}</div>
+      <small>{{ user.role.name|upper }}</small>
+      <div class="footer-buttons">
+        <a href="/profile" class="btn btn-secondary">Profil</a>
+        <button onclick="logout()" class="btn btn-danger">Çıkış</button>
+      </div>
+    </div>
+  </aside>
+  <main class="content">
+    <header class="topbar">
+      <div class="left-actions">
+        <button class="btn" id="toggleSidebar">☰</button>
+        <h2>{% block page_title %}Contract Tracking{% endblock %}</h2>
+      </div>
+      <div class="right-actions">
+        <span id="clock"></span>
+        <button class="btn" id="toggleTheme">🌓</button>
+      </div>
+    </header>
+    <section class="page-content">
+      {% block content %}{% endblock %}
+    </section>
+  </main>
+</div>
+<script>window.CT_APP = { timezone: '{{ timezone }}', role: '{{ user.role.name }}' };</script>
+<script src="/static/js/app.js"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

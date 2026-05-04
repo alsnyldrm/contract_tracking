@@ -1,0 +1,228 @@
+import json
+import logging
+import smtplib
+from email.message import EmailMessage
+
+from fastapi import APIRouter, Depends, HTTPException, Request
+from sqlalchemy.orm import Session
+
+from app.core.database import get_db
+from app.core.deps import enforce_csrf, get_current_user, require_admin
+from app.core.logging_config import log_event
+from app.core.security import now_utc
+from app.models import AppSetting, LdapSetting, LogSetting, SamlSetting, SmtpSetting, User
+from app.services.audit_service import add_audit_log
+from app.services.ldap_service import test_ldap_connection
+from app.services.saml_service import serialize_attribute_mapping
+
+router = APIRouter()
+
+
+def _masked(value: str | None) -> str | None:
+    if not value:
+        return value
+    return '********'
+
+
+@router.get('/')
+def get_settings_bundle(_: User = Depends(require_admin), db: Session = Depends(get_db)):
+    ldap = db.query(LdapSetting).first()
+    saml = db.query(SamlSetting).first()
+    smtp = db.query(SmtpSetting).first()
+    logs = db.query(LogSetting).first()
+    timezone = db.query(AppSetting).filter(AppSetting.key == 'system.timezone').first()
+
+    return {
+        'timezone': timezone.value if timezone else 'Europe/Istanbul',
+        'ldap': {
+            'server_address': ldap.server_address if ldap else '',
+            'port': ldap.port if ldap else 636,
+            'base_dn': ldap.base_dn if ldap else '',
+            'bind_dn': ldap.bind_dn if ldap else '',
+            'bind_password': _masked(ldap.bind_password if ldap else ''),
+            'user_search_filter': ldap.user_search_filter if ldap else '(sAMAccountName={query})',
+            'group_search_filter': ldap.group_search_filter if ldap else '',
+            'tls_enabled': ldap.tls_enabled if ldap else True,
+            'verify_cert': ldap.verify_cert if ldap else True,
+            'timeout_seconds': ldap.timeout_seconds if ldap else 5,
+        },
+        'saml': {
+            'enabled': saml.enabled if saml else False,
+            'entity_id': saml.entity_id if saml else '',
+            'sso_url': saml.sso_url if saml else '',
+            'slo_url': saml.slo_url if saml else '',
+            'x509_certificate': _masked(saml.x509_certificate if saml else ''),
+            'attribute_mapping': saml.attribute_mapping if saml else {},
+            'nameid_mapping': saml.nameid_mapping if saml else '',
+            'email_attribute': saml.email_attribute if saml else 'email',
+            'display_name_attribute': saml.display_name_attribute if saml else 'displayName',
+            'role_mapping': saml.role_mapping if saml else {},
+        },
+        'smtp': {
+            'host': smtp.host if smtp else '',
+            'port': smtp.port if smtp else 587,
+            'username': smtp.username if smtp else '',
+            'password': _masked(smtp.password if smtp else ''),
+            'tls_ssl': smtp.tls_ssl if smtp else True,
+            'sender_email': smtp.sender_email if smtp else '',
+        },
+        'log_settings': {
+            'max_file_size_mb': logs.max_file_size_mb if logs else 20,
+            'retention_days': logs.retention_days if logs else 30,
+            'auto_refresh_seconds': logs.auto_refresh_seconds if logs else 5,
+        },
+    }
+
+
+@router.put('/timezone', dependencies=[Depends(enforce_csrf)])
+def update_timezone(payload: dict, request: Request, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    tz = payload.get('timezone', 'Europe/Istanbul')
+    row = db.query(AppSetting).filter(AppSetting.key == 'system.timezone').first()
+    if not row:
+        row = AppSetting(key='system.timezone', value=tz, created_at=now_utc(), updated_at=now_utc())
+        db.add(row)
+    else:
+        row.value = tz
+        row.updated_at = now_utc()
+    db.commit()
+
+    log_event('settings', logging.INFO, 'Timezone güncellendi', module='settings', action='timezone_update', user_id=admin.id, username=admin.username, user_role=admin.role.name, request_id=getattr(request.state, 'request_id', None), ip_address=request.client.host if request.client else None, details={'timezone': tz})
+    return {'ok': True}
+
+
+@router.put('/ldap', dependencies=[Depends(enforce_csrf)])
+def update_ldap(payload: dict, request: Request, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    row = db.query(LdapSetting).first()
+    if not row:
+        row = LdapSetting(created_at=now_utc(), updated_at=now_utc())
+        db.add(row)
+
+    for field in ['server_address', 'port', 'base_dn', 'bind_dn', 'user_search_filter', 'group_search_filter', 'tls_enabled', 'verify_cert', 'timeout_seconds']:
+        if field in payload:
+            setattr(row, field, payload[field])
+    if payload.get('bind_password') and payload.get('bind_password') != '********':
+        row.bind_password = payload['bind_password']
+    row.updated_at = now_utc()
+    db.commit()
+
+    add_audit_log(
+        db,
+        table_name='ldap_settings',
+        record_id=str(row.id),
+        action='update',
+        user=admin,
+        ip_address=request.client.host if request.client else None,
+        request_id=getattr(request.state, 'request_id', None),
+        new_values={'server_address': row.server_address, 'port': row.port},
+    )
+    log_event('settings', logging.INFO, 'LDAPS ayarları güncellendi', module='settings', action='ldap_update', user_id=admin.id, username=admin.username, user_role=admin.role.name, request_id=getattr(request.state, 'request_id', None))
+    return {'ok': True}
+
+
+@router.post('/ldap/test', dependencies=[Depends(enforce_csrf)])
+def ldap_test(request: Request, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    ok, msg = test_ldap_connection(db, {'request_id': getattr(request.state, 'request_id', None), 'ip_address': request.client.host if request.client else None, 'user_agent': request.headers.get('user-agent')})
+    return {'ok': ok, 'message': msg}
+
+
+@router.put('/saml', dependencies=[Depends(enforce_csrf)])
+def update_saml(payload: dict, request: Request, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    row = db.query(SamlSetting).first()
+    if not row:
+        row = SamlSetting(created_at=now_utc(), updated_at=now_utc())
+        db.add(row)
+
+    row.enabled = bool(payload.get('enabled', row.enabled if row.id else False))
+    row.entity_id = payload.get('entity_id', row.entity_id)
+    row.sso_url = payload.get('sso_url', row.sso_url)
+    row.slo_url = payload.get('slo_url', row.slo_url)
+    if payload.get('x509_certificate') and payload.get('x509_certificate') != '********':
+        row.x509_certificate = payload.get('x509_certificate')
+    row.attribute_mapping = serialize_attribute_mapping(payload.get('attribute_mapping', row.attribute_mapping))
+    row.nameid_mapping = payload.get('nameid_mapping', row.nameid_mapping)
+    row.email_attribute = payload.get('email_attribute', row.email_attribute)
+    row.display_name_attribute = payload.get('display_name_attribute', row.display_name_attribute)
+    role_mapping = payload.get('role_mapping', row.role_mapping)
+    if isinstance(role_mapping, str):
+        try:
+            role_mapping = json.loads(role_mapping)
+        except Exception:
+            role_mapping = {}
+    row.role_mapping = role_mapping or {}
+    row.updated_at = now_utc()
+    db.commit()
+
+    add_audit_log(
+        db,
+        table_name='saml_settings',
+        record_id=str(row.id),
+        action='update',
+        user=admin,
+        ip_address=request.client.host if request.client else None,
+        request_id=getattr(request.state, 'request_id', None),
+        new_values={'enabled': row.enabled, 'entity_id': row.entity_id},
+    )
+    log_event('settings', logging.INFO, 'SAML ayarları güncellendi', module='settings', action='saml_update', user_id=admin.id, username=admin.username, user_role=admin.role.name, request_id=getattr(request.state, 'request_id', None))
+    return {'ok': True}
+
+
+@router.put('/smtp', dependencies=[Depends(enforce_csrf)])
+def update_smtp(payload: dict, request: Request, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    row = db.query(SmtpSetting).first()
+    if not row:
+        row = SmtpSetting(created_at=now_utc(), updated_at=now_utc())
+        db.add(row)
+
+    for field in ['host', 'port', 'username', 'tls_ssl', 'sender_email']:
+        if field in payload:
+            setattr(row, field, payload[field])
+    if payload.get('password') and payload.get('password') != '********':
+        row.password = payload['password']
+    row.updated_at = now_utc()
+    db.commit()
+    log_event('settings', logging.INFO, 'SMTP ayarları güncellendi', module='settings', action='smtp_update', user_id=admin.id, username=admin.username, user_role=admin.role.name, request_id=getattr(request.state, 'request_id', None))
+    return {'ok': True}
+
+
+@router.post('/smtp/test', dependencies=[Depends(enforce_csrf)])
+def smtp_test(payload: dict, request: Request, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    row = db.query(SmtpSetting).first()
+    if not row or not row.host:
+        raise HTTPException(status_code=400, detail='SMTP ayarları eksik')
+    to_email = payload.get('to') or row.sender_email
+    if not to_email:
+        raise HTTPException(status_code=400, detail='Test e-posta alıcısı gerekli')
+
+    msg = EmailMessage()
+    msg['Subject'] = 'Contract Tracking SMTP Test'
+    msg['From'] = row.sender_email
+    msg['To'] = to_email
+    msg.set_content('Bu bir test e-postasıdır.')
+
+    try:
+        with smtplib.SMTP(row.host, row.port, timeout=10) as smtp:
+            if row.tls_ssl:
+                smtp.starttls()
+            if row.username and row.password:
+                smtp.login(row.username, row.password)
+            smtp.send_message(msg)
+        log_event('notification', logging.INFO, 'SMTP test mail başarılı', module='smtp', action='test_mail', user_id=admin.id, username=admin.username, request_id=getattr(request.state, 'request_id', None))
+        return {'ok': True, 'message': 'Test e-postası gönderildi'}
+    except Exception as exc:
+        log_event('notification', logging.ERROR, 'SMTP test mail hatası', module='smtp', action='test_mail', user_id=admin.id, username=admin.username, request_id=getattr(request.state, 'request_id', None), details={'error': str(exc)}, exc_info=exc)
+        return {'ok': False, 'message': f'Gönderim başarısız: {exc}'}
+
+
+@router.put('/logs', dependencies=[Depends(enforce_csrf)])
+def update_log_settings(payload: dict, request: Request, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    row = db.query(LogSetting).first()
+    if not row:
+        row = LogSetting(created_at=now_utc(), updated_at=now_utc())
+        db.add(row)
+    for field in ['max_file_size_mb', 'retention_days', 'auto_refresh_seconds']:
+        if field in payload:
+            setattr(row, field, payload[field])
+    row.updated_at = now_utc()
+    db.commit()
+    log_event('settings', logging.INFO, 'Log ayarları güncellendi', module='settings', action='log_settings_update', user_id=admin.id, username=admin.username, user_role=admin.role.name, request_id=getattr(request.state, 'request_id', None))
+    return {'ok': True}

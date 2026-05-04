@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+{% block page_title %}Sözleşmeler{% endblock %}
+{% block content %}
+<div class="toolbar">
+  <input id="search" placeholder="Sözleşme ara" />
+  <select id="statusFilter"><option value="">Durum (Tümü)</option><option>Taslak</option><option>Aktif</option><option>Yaklaşıyor</option><option>Süresi Doldu</option><option>İptal</option><option>Yenilendi</option></select>
+  {% if user.role.name == 'admin' %}<button class="btn btn-primary" onclick="openContractModal()">Yeni Sözleşme</button>{% endif %}
+</div>
+<div class="panel">
+  <table class="table" id="contractTable"><thead><tr><th>No</th><th>Kurum</th><th>Ad</th><th>Durum</th><th>Kritik</th><th>Bitiş</th><th>İşlem</th></tr></thead><tbody></tbody></table>
+</div>
+<div class="modal" id="contractModal"><div class="modal-content wide">
+  <h3>Sözleşme Kaydı</h3>
+  <div class="form-grid">
+    <input id="c_contract_number" placeholder="Sözleşme numarası" />
+    <input id="c_contract_name" placeholder="Sözleşme adı" />
+    <select id="c_institution_id"></select>
+    <select id="c_status"><option>Taslak</option><option>Aktif</option><option>Yaklaşıyor</option><option>Süresi Doldu</option><option>İptal</option><option>Yenilendi</option></select>
+    <select id="c_critical_level"><option>Düşük</option><option>Orta</option><option>Yüksek</option><option>Kritik</option></select>
+    <input type="date" id="c_end_date" />
+    <input id="c_responsible_person_name" placeholder="Sorumlu personel" />
+    <input id="c_tags" placeholder="Etiketler (virgülle)" />
+  </div>
+  <textarea id="c_description" placeholder="Açıklama"></textarea>
+  <div class="modal-actions"><button class="btn" onclick="closeContractModal()">Kapat</button><button class="btn btn-primary" onclick="saveContract()">Kaydet</button></div>
+</div></div>
+{% endblock %}
+{% block scripts %}<script src="/static/js/contracts.js"></script>{% endblock %}

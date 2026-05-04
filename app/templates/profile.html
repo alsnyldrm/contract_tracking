@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+{% block page_title %}Profil{% endblock %}
+{% block content %}
+<div class="panel" id="profileBox"></div>
+<div class="panel">
+  <h3>Tercihler</h3>
+  <label><input type="checkbox" id="prefDarkMode" /> Dark mode</label>
+  <label><input type="checkbox" id="prefSidebar" /> Sidebar kapalı</label>
+  <button class="btn btn-primary" onclick="savePreferences()">Tercihleri Kaydet</button>
+</div>
+<div class="panel" id="passwordPanel">
+  <h3>Şifre Değiştir</h3>
+  <input type="password" id="newPassword" placeholder="Yeni şifre" />
+  <button class="btn btn-primary" onclick="changePassword()">Şifreyi Güncelle</button>
+</div>
+{% endblock %}
+{% block scripts %}<script src="/static/js/profile.js"></script>{% endblock %}

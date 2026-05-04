@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Contract Tracking - Giriş</title>
+  <link rel="icon" type="image/svg+xml" href="/static/img/favicon.svg" />
+  <style>
+    :root { --primary:#0f355d; --secondary:#f4b400; --bg:#f3f6fa; --card:#ffffff; --text:#1f2937; --danger:#dc2626; --microsoft:#0078d4; }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg:#0b1320; --card:#111b2e; --text:#e5edf8; --primary:#3f78b8; }
+    }
+    * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    body { margin:0; min-height:100vh; background:linear-gradient(120deg, rgba(15,53,93,.95), rgba(13,27,42,.88)), url('https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?q=80&w=1920&auto=format&fit=crop') center/cover no-repeat; display:flex; align-items:center; justify-content:center; padding:24px; }
+    .container { width:100%; max-width:1100px; display:grid; grid-template-columns:1.2fr 1fr; background:var(--card); border-radius:14px; overflow:hidden; box-shadow:0 20px 45px rgba(0,0,0,.26); }
+    .left { padding:36px; background:linear-gradient(180deg, rgba(15,53,93,.95), rgba(15,53,93,.8)); color:#fff; }
+    .left h1 { margin:14px 0; font-size:34px; }
+    .left p { opacity:.92; line-height:1.6; }
+    .feature { margin-top:20px; padding:10px 0; border-bottom:1px solid rgba(255,255,255,.18); }
+    .right { padding:40px; color:var(--text); }
+    .right h2 { margin:0 0 10px; color:var(--primary); }
+    .field { margin:14px 0; }
+    .field label { display:block; margin-bottom:6px; font-weight:600; }
+    .field input { width:100%; padding:12px; border:1px solid #cbd5e1; border-radius:8px; }
+    .btn { width:100%; padding:12px; border:none; border-radius:8px; cursor:pointer; font-weight:700; }
+    .btn-primary { background:var(--primary); color:#fff; margin-top:8px; }
+    .btn-ms { background:var(--microsoft); color:#fff; margin-top:12px; text-decoration:none; display:block; text-align:center; }
+    .error { margin-top:10px; color:var(--danger); min-height:20px; }
+    @media (max-width: 900px) { .container { grid-template-columns:1fr; } .left { display:none; } }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <section class="left">
+      <img src="/static/img/logo.svg" alt="Logo" width="72" />
+      <h1>Contract Tracking</h1>
+      <p>Kurum sözleşmelerini, bitiş tarihlerini, yenileme süreçlerini, raporları ve log yönetimini merkezi olarak yönetin.</p>
+      <div class="feature">Sözleşme, kurum, belge ve sorumlu personel yönetimi</div>
+      <div class="feature">Dashboard, raporlama, audit ve güvenlik logları</div>
+      <div class="feature">LDAPS, SAML ve SMTP entegrasyon altyapısı</div>
+    </section>
+    <section class="right">
+      <h2>Hoş Geldiniz</h2>
+      <p>Kurumsal sözleşme takip sistemine giriş yapın.</p>
+      <form id="loginForm">
+        <div class="field">
+          <label for="username">Kullanıcı Adı</label>
+          <input id="username" name="username" autocomplete="username" required />
+        </div>
+        <div class="field">
+          <label for="password">Şifre</label>
+          <input type="password" id="password" name="password" autocomplete="current-password" required />
+        </div>
+        <button type="submit" class="btn btn-primary">Giriş</button>
+      </form>
+      <a href="/auth/saml/login" class="btn btn-ms">Microsoft Entra ID ile Giriş</a>
+      <div class="error" id="errorBox"></div>
+      <small>İlk kurulum varsayılan kullanıcı: <b>admin</b></small>
+    </section>
+  </div>
+<script>
+const form = document.getElementById('loginForm');
+const errorBox = document.getElementById('errorBox');
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  errorBox.textContent = '';
+  const fd = new FormData(form);
+  const res = await fetch('/auth/login', { method:'POST', body: fd });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    errorBox.textContent = data.detail || 'Giriş başarısız';
+    return;
+  }
+  if (data.must_change_password) {
+    alert('İlk giriş sonrası şifrenizi değiştirmeniz gerekiyor.');
+  }
+  location.href = '/dashboard';
+});
+</script>
+</body>
+</html>

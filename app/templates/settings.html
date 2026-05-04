@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+{% block page_title %}Ayarlar{% endblock %}
+{% block content %}
+<div class="tabs">
+  <button class="tab-btn active" data-tab="general">Genel</button>
+  <button class="tab-btn" data-tab="timezone">Time Zone</button>
+  <button class="tab-btn" data-tab="ldap">LDAPS</button>
+  <button class="tab-btn" data-tab="saml">SAML</button>
+  <button class="tab-btn" data-tab="smtp">SMTP / Bildirim</button>
+  <button class="tab-btn" data-tab="reports">Raporlar</button>
+  <button class="tab-btn" data-tab="logs">Log Ayarları</button>
+</div>
+<div class="tab-panel active" id="tab-general"><div class="panel"><h3>Genel Ayarlar</h3><p>Temel uygulama parametreleri bu alanda yönetilir.</p></div></div>
+<div class="tab-panel" id="tab-timezone"><div class="panel"><h3>Time Zone</h3><input id="timezone" /><button class="btn btn-primary" onclick="saveTimezone()">Kaydet</button></div></div>
+<div class="tab-panel" id="tab-ldap"><div class="panel"><h3>LDAPS</h3><div class="form-grid"><input id="ldap_server_address" placeholder="Sunucu adresi" /><input id="ldap_port" placeholder="Port" /><input id="ldap_base_dn" placeholder="Base DN" /><input id="ldap_bind_dn" placeholder="Bind DN" /><input id="ldap_bind_password" placeholder="Bind password" /><input id="ldap_user_search_filter" placeholder="User search filter" /><input id="ldap_group_search_filter" placeholder="Group search filter" /><input id="ldap_timeout_seconds" placeholder="Timeout" /></div><label><input type="checkbox" id="ldap_tls_enabled" /> TLS/SSL aktif</label><label><input type="checkbox" id="ldap_verify_cert" /> Sertifika doğrulama aktif</label><div class="toolbar"><button class="btn btn-primary" onclick="saveLdap()">Kaydet</button><button class="btn" onclick="testLdap()">Test Bağlantısı</button></div><div id="ldapTestResult"></div></div></div>
+<div class="tab-panel" id="tab-saml"><div class="panel"><h3>SAML</h3><div class="form-grid"><input id="saml_entity_id" placeholder="Entity ID" /><input id="saml_sso_url" placeholder="SSO URL" /><input id="saml_slo_url" placeholder="SLO URL" /><input id="saml_email_attribute" placeholder="Email attribute" /><input id="saml_display_name_attribute" placeholder="Display name attribute" /><input id="saml_nameid_mapping" placeholder="NameID mapping" /></div><textarea id="saml_x509_certificate" placeholder="X.509 certificate"></textarea><textarea id="saml_attribute_mapping" placeholder='{"email":"mail"}'></textarea><textarea id="saml_role_mapping" placeholder='{"admin":"admin"}'></textarea><label><input type="checkbox" id="saml_enabled" /> SAML aktif</label><button class="btn btn-primary" onclick="saveSaml()">Kaydet</button></div></div>
+<div class="tab-panel" id="tab-smtp"><div class="panel"><h3>SMTP</h3><div class="form-grid"><input id="smtp_host" placeholder="SMTP host" /><input id="smtp_port" placeholder="SMTP port" /><input id="smtp_username" placeholder="SMTP kullanıcı" /><input id="smtp_password" placeholder="SMTP şifre" /><input id="smtp_sender_email" placeholder="Gönderen e-posta" /></div><label><input type="checkbox" id="smtp_tls_ssl" /> TLS/SSL</label><div class="toolbar"><button class="btn btn-primary" onclick="saveSmtp()">Kaydet</button><button class="btn" onclick="testSmtp()">Test Mail</button></div><div id="smtpResult"></div></div></div>
+<div class="tab-panel" id="tab-reports"><div class="panel"><h3>Rapor Modülü Ayarları</h3><p>Rapor modüllerini Raporlar ekranından aktif/pasif yapabilirsiniz.</p></div></div>
+<div class="tab-panel" id="tab-logs"><div class="panel"><h3>Log Ayarları</h3><input id="log_max_file_size_mb" placeholder="Maks dosya boyutu MB" /><input id="log_retention_days" placeholder="Saklama günü" /><input id="log_auto_refresh_seconds" placeholder="Oto yenileme saniye" /><button class="btn btn-primary" onclick="saveLogSettings()">Kaydet</button></div></div>
+{% endblock %}
+{% block scripts %}<script src="/static/js/settings.js"></script>{% endblock %}
