@@ -46,5 +46,5 @@ async function deleteInstitution(id) {
 
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('q').addEventListener('input', () => loadInstitutions());
-  loadInstitutions().catch(e => alert(e.message));
+  loadInstitutions().catch(e => showToast(e.message, 'error'));
 });

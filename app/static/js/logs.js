@@ -17,7 +17,12 @@ async function loadLogs() {
 }
 
 function showLogDetail(raw) {
-  alert(JSON.parse(raw));
+  const row = JSON.parse(raw);
+  const el = document.getElementById('logDetailContent');
+  if (el) {
+    el.textContent = JSON.stringify(row, null, 2);
+    document.getElementById('logDetailModal')?.classList.add('open');
+  }
 }
 
 function downloadLog() {

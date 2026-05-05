@@ -43,4 +43,4 @@ function exportReport(fmt) {
   window.open(`/api/reports/${code}/export/${fmt}`, '_blank');
 }
 
-document.addEventListener('DOMContentLoaded', () => loadModules().catch(e => alert(e.message)));
+document.addEventListener('DOMContentLoaded', () => loadModules().catch(e => showToast(e.message, 'error')));

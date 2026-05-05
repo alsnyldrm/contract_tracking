@@ -9,4 +9,4 @@ async function changeRole(id, role) {
   loadUsers();
 }
 
-document.addEventListener('DOMContentLoaded', () => loadUsers().catch(e => alert(e.message)));
+document.addEventListener('DOMContentLoaded', () => loadUsers().catch(e => showToast(e.message, 'error')));

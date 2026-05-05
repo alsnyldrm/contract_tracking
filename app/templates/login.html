@@ -61,21 +61,33 @@
 <script>
 const form = document.getElementById('loginForm');
 const errorBox = document.getElementById('errorBox');
+const submitBtn = form.querySelector('button[type="submit"]');
+
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
   errorBox.textContent = '';
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Giriş yapılıyor...';
   const fd = new FormData(form);
-  const res = await fetch('/auth/login', { method:'POST', body: fd });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    errorBox.textContent = data.detail || 'Giriş başarısız';
-    return;
+  try {
+    const res = await fetch('/auth/login', { method: 'POST', body: fd });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      errorBox.textContent = data.detail || 'Giriş başarısız';
+      return;
+    }
+    location.href = '/dashboard';
+  } catch (err) {
+    errorBox.textContent = 'Sunucuya bağlanılamadı. Lütfen bağlantınızı kontrol edin.';
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Giriş';
   }
-  if (data.must_change_password) {
-    alert('İlk giriş sonrası şifrenizi değiştirmeniz gerekiyor.');
-  }
-  location.href = '/dashboard';
 });
+
+const params = new URLSearchParams(location.search);
+if (params.get('error') === 'saml') errorBox.textContent = 'SAML ile giriş başlatılamadı.';
+if (params.get('error') === 'samlacs') errorBox.textContent = 'SAML kimlik doğrulaması başarısız.';
 </script>
 </body>
 </html>

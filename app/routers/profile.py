@@ -7,16 +7,31 @@ from app.core.database import get_db
 from app.core.deps import enforce_csrf, get_current_user
 from app.core.logging_config import log_event
 from app.core.security import now_utc
-from app.models import User, UserPreference
+from app.models import User, UserPreference, UserSession
 from app.services.auth_service import force_password_change
 
 router = APIRouter()
 
 
+def _log(module, msg, action, user, request, **kw):
+    log_event(module, logging.INFO, msg, module=module, action=action,
+              user_id=user.id, username=user.username, user_role=user.role.name,
+              request_id=getattr(request.state, 'request_id', None),
+              ip_address=request.client.host if request.client else None, **kw)
+
+
 @router.get('/')
 def my_profile(request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     pref = db.query(UserPreference).filter(UserPreference.user_id == user.id).first()
-    log_event('profile', logging.INFO, 'Profil görüntülendi', module='profile', action='view', user_id=user.id, username=user.username, user_role=user.role.name, request_id=getattr(request.state, 'request_id', None), ip_address=request.client.host if request.client else None)
+
+    last_session = (
+        db.query(UserSession)
+        .filter(UserSession.user_id == user.id)
+        .order_by(UserSession.created_at.desc())
+        .first()
+    )
+
+    _log('profile', 'Profil görüntülendi', 'view', user, request)
     return {
         'id': user.id,
         'username': user.username,
@@ -24,7 +39,10 @@ def my_profile(request: Request, user: User = Depends(get_current_user), db: Ses
         'email': user.email,
         'role': user.role.name,
         'auth_source': user.auth_source,
+        'is_active': user.is_active,
         'must_change_password': user.must_change_password,
+        'created_at': user.created_at.isoformat() if user.created_at else None,
+        'last_login': last_session.created_at.isoformat() if last_session else None,
         'preferences': {
             'dark_mode': pref.dark_mode if pref else False,
             'sidebar_collapsed': pref.sidebar_collapsed if pref else False,
@@ -37,7 +55,8 @@ def my_profile(request: Request, user: User = Depends(get_current_user), db: Ses
 def update_preferences(payload: dict, request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     pref = db.query(UserPreference).filter(UserPreference.user_id == user.id).first()
     if not pref:
-        pref = UserPreference(user_id=user.id, dark_mode=False, sidebar_collapsed=False, filter_preferences={}, created_at=now_utc(), updated_at=now_utc())
+        pref = UserPreference(user_id=user.id, dark_mode=False, sidebar_collapsed=False,
+                              filter_preferences={}, created_at=now_utc(), updated_at=now_utc())
         db.add(pref)
 
     if 'dark_mode' in payload:
@@ -49,15 +68,38 @@ def update_preferences(payload: dict, request: Request, user: User = Depends(get
     pref.updated_at = now_utc()
     db.commit()
 
-    log_event('profile', logging.INFO, 'Profil tercihleri güncellendi', module='profile', action='preferences_update', user_id=user.id, username=user.username, user_role=user.role.name, request_id=getattr(request.state, 'request_id', None), ip_address=request.client.host if request.client else None)
+    _log('profile', 'Profil tercihleri güncellendi', 'preferences_update', user, request)
+    return {'ok': True}
+
+
+@router.put('/fullname', dependencies=[Depends(enforce_csrf)])
+def update_fullname(payload: dict, request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    name = (payload.get('full_name') or '').strip()
+    if not name:
+        raise HTTPException(status_code=400, detail='Ad Soyad boş olamaz')
+    if len(name) > 255:
+        raise HTTPException(status_code=400, detail='Ad Soyad çok uzun (maks. 255 karakter)')
+    user.full_name = name
+    user.updated_at = now_utc()
+    db.commit()
+    _log('profile', 'Ad Soyad güncellendi', 'fullname_update', user, request)
     return {'ok': True}
 
 
 @router.put('/password', dependencies=[Depends(enforce_csrf)])
 def profile_password_change(payload: dict, request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    new_password = payload.get('new_password')
+    new_password = payload.get('new_password', '')
     if not new_password or len(new_password) < 8:
-        raise HTTPException(status_code=400, detail='Yeni şifre en az 8 karakter olmalı')
+        raise HTTPException(status_code=400, detail='Yeni şifre en az 8 karakter olmalıdır')
+
+    # Yerel kullanıcılar için mevcut şifre kontrolü
+    if user.auth_source == 'local' and user.password_hash:
+        from passlib.context import CryptContext
+        ctx = CryptContext(schemes=['bcrypt'], deprecated='auto')
+        current = payload.get('current_password', '')
+        if not current or not ctx.verify(current, user.password_hash):
+            raise HTTPException(status_code=400, detail='Mevcut şifre hatalı')
+
     force_password_change(db, user, new_password)
-    log_event('auth', logging.INFO, 'Profil ekranından şifre değiştirildi', module='auth', action='change_password', user_id=user.id, username=user.username, user_role=user.role.name, request_id=getattr(request.state, 'request_id', None), ip_address=request.client.host if request.client else None)
+    _log('auth', 'Profil ekranından şifre değiştirildi', 'change_password', user, request)
     return {'ok': True}

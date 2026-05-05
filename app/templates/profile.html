@@ -1,17 +1,179 @@
 {% extends 'base.html' %}
+{% block title %}Profil — Contract Tracking{% endblock %}
 {% block page_title %}Profil{% endblock %}
+
 {% block content %}
-<div class="panel" id="profileBox"></div>
-<div class="panel">
-  <h3>Tercihler</h3>
-  <label><input type="checkbox" id="prefDarkMode" /> Dark mode</label>
-  <label><input type="checkbox" id="prefSidebar" /> Sidebar kapalı</label>
-  <button class="btn btn-primary" onclick="savePreferences()">Tercihleri Kaydet</button>
+<!-- Profil başlığı -->
+<div class="panel" id="profileHeader">
+  <div class="profile-header">
+    <div class="profile-avatar-lg" id="avatarInitial">?</div>
+    <div class="profile-meta">
+      <h2 id="profileFullName">Yükleniyor…</h2>
+      <p id="profileSubtitle"></p>
+    </div>
+  </div>
 </div>
-<div class="panel" id="passwordPanel">
-  <h3>Şifre Değiştir</h3>
-  <input type="password" id="newPassword" placeholder="Yeni şifre" />
-  <button class="btn btn-primary" onclick="changePassword()">Şifreyi Güncelle</button>
+
+<!-- Sekmeler -->
+<div class="tabs">
+  <button class="tab-btn active" onclick="switchTab('tab-account', this)">Hesap Bilgileri</button>
+  <button class="tab-btn" onclick="switchTab('tab-prefs', this)">Görünüm Tercihleri</button>
+  <button class="tab-btn" onclick="switchTab('tab-security', this)">Güvenlik</button>
+  <button class="tab-btn" onclick="switchTab('tab-sessions', this)">Oturum Bilgileri</button>
+</div>
+
+<!-- SEKMe 1: Hesap bilgileri -->
+<div class="tab-panel active" id="tab-account">
+  <div class="panel">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <h3 style="margin:0">Hesap Bilgileri</h3>
+      <button class="btn btn-sm btn-secondary" onclick="toggleEditName()">Ad Güncelle</button>
+    </div>
+
+    <!-- Ad güncelleme formu (gizli) -->
+    <div id="editNameForm" style="display:none;margin-bottom:14px;background:var(--bg);border-radius:8px;padding:12px;border:1px solid var(--border)">
+      <div class="field">
+        <label for="inputFullName">Ad Soyad</label>
+        <input id="inputFullName" type="text" placeholder="Ad Soyad" style="max-width:320px" />
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-primary btn-sm" onclick="saveFullName()">Kaydet</button>
+        <button class="btn btn-sm" onclick="toggleEditName()">İptal</button>
+      </div>
+    </div>
+
+    <div class="info-row">
+      <span class="info-label">Ad Soyad</span>
+      <span class="info-value" id="infoFullName">—</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">Kullanıcı Adı</span>
+      <span class="info-value" id="infoUsername">—</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">E-posta</span>
+      <span class="info-value" id="infoEmail">—</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">Rol</span>
+      <span class="info-value" id="infoRole">—</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">Kimlik Kaynağı</span>
+      <span class="info-value" id="infoAuthSource">—</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">Hesap Durumu</span>
+      <span class="info-value" id="infoActive">—</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">Hesap Oluşturulma</span>
+      <span class="info-value" id="infoCreatedAt">—</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">Son Giriş</span>
+      <span class="info-value" id="infoLastLogin">—</span>
+    </div>
+  </div>
+</div>
+
+<!-- SEKME 2: Görünüm tercihleri -->
+<div class="tab-panel" id="tab-prefs">
+  <div class="panel">
+    <h3>Görünüm Tercihleri</h3>
+    <p style="font-size:13px;color:var(--muted);margin-top:0">Bu tercihler tarayıcı oturumunuz boyunca geçerlidir.</p>
+
+    <div class="toggle-row">
+      <div class="toggle-desc">
+        <strong>Karanlık Mod</strong>
+        <small>Ekranı karanlık temada göster</small>
+      </div>
+      <label class="toggle-switch">
+        <input type="checkbox" id="prefDarkMode" onchange="prefChanged()" />
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+
+    <div class="toggle-row">
+      <div class="toggle-desc">
+        <strong>Kenar Çubuğunu Kapat</strong>
+        <small>Sayfa yüklendiğinde kenar çubuğunu kapalı başlat</small>
+      </div>
+      <label class="toggle-switch">
+        <input type="checkbox" id="prefSidebar" onchange="prefChanged()" />
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+
+    <div style="margin-top:14px">
+      <button class="btn btn-primary" onclick="savePreferences()">Tercihleri Kaydet</button>
+      <span id="prefStatus" style="font-size:12px;color:var(--muted);margin-left:10px"></span>
+    </div>
+  </div>
+</div>
+
+<!-- SEKME 3: Güvenlik -->
+<div class="tab-panel" id="tab-security">
+  <div class="panel" id="passwordPanel">
+    <h3>Şifre Değiştir</h3>
+    <p style="font-size:13px;color:var(--muted);margin-top:0">Şifreniz en az 8 karakter, harf ve rakam içermelidir.</p>
+
+    <div class="field" style="max-width:340px">
+      <label for="currentPassword">Mevcut Şifre</label>
+      <input type="password" id="currentPassword" placeholder="••••••••" autocomplete="current-password" />
+    </div>
+    <div class="field" style="max-width:340px">
+      <label for="newPassword">Yeni Şifre</label>
+      <input type="password" id="newPassword" placeholder="••••••••" autocomplete="new-password" />
+      <div class="form-hint">En az 8 karakter</div>
+    </div>
+    <div class="field" style="max-width:340px">
+      <label for="confirmPassword">Yeni Şifre (Tekrar)</label>
+      <input type="password" id="confirmPassword" placeholder="••••••••" autocomplete="new-password" />
+    </div>
+    <div id="passwordError" class="alert alert-error" style="display:none;max-width:340px"></div>
+    <button class="btn btn-primary" onclick="changePassword()">Şifreyi Güncelle</button>
+  </div>
+
+  <div class="panel">
+    <h3>Hesap Güvenliği</h3>
+    <div class="info-row">
+      <span class="info-label">İki Faktörlü Doğrulama</span>
+      <span class="info-value"><span class="badge badge-gray">Mevcut değil</span></span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">Kimlik Doğrulama Yöntemi</span>
+      <span class="info-value" id="secAuthSource">—</span>
+    </div>
+    <div class="info-row" id="mustChangeRow" style="display:none">
+      <span class="info-label">Zorunlu Değişiklik</span>
+      <span class="info-value"><span class="badge badge-yellow">İlk girişte şifre değiştirmeniz gerekiyor</span></span>
+    </div>
+  </div>
+</div>
+
+<!-- SEKME 4: Oturum bilgileri -->
+<div class="tab-panel" id="tab-sessions">
+  <div class="panel">
+    <h3>Aktif Oturum</h3>
+    <p style="font-size:13px;color:var(--muted);margin-top:0">Mevcut tarayıcı oturumunuzla ilgili bilgiler.</p>
+    <div class="info-row">
+      <span class="info-label">Kullanıcı Adı</span>
+      <span class="info-value" id="sessUsername">—</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">Son Giriş Zamanı</span>
+      <span class="info-value" id="sessLastLogin">—</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">Kimlik Kaynağı</span>
+      <span class="info-value" id="sessAuthSource">—</span>
+    </div>
+    <div style="margin-top:14px">
+      <button class="btn btn-danger" onclick="logout()">Oturumu Kapat</button>
+    </div>
+  </div>
 </div>
 {% endblock %}
+
 {% block scripts %}<script src="/static/js/profile.js"></script>{% endblock %}

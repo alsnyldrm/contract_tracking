@@ -10,7 +10,12 @@ async function api(url, options = {}) {
   if (!(options.body instanceof FormData)) {
     headers['Content-Type'] = headers['Content-Type'] || 'application/json';
   }
-  const res = await fetch(url, { credentials: 'same-origin', ...options, headers });
+  let res;
+  try {
+    res = await fetch(url, { credentials: 'same-origin', ...options, headers });
+  } catch (e) {
+    throw new Error('Sunucuya bağlanılamadı. Lütfen ağ bağlantınızı kontrol edin.');
+  }
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: 'İstek başarısız' }));
     throw new Error(err.detail || 'İstek başarısız');
@@ -20,14 +25,32 @@ async function api(url, options = {}) {
   return res;
 }
 
+/* ── Toast notifications ── */
+function showToast(message, type = 'info', duration = 4000) {
+  const container = document.getElementById('toastContainer');
+  if (!container) return;
+  const icons = { success: '✓', error: '✕', info: 'ℹ', warn: '⚠' };
+  const el = document.createElement('div');
+  el.className = `toast toast-${type}`;
+  el.innerHTML = `<span>${icons[type] || 'ℹ'}</span><span>${message}</span>`;
+  container.appendChild(el);
+  setTimeout(() => {
+    el.style.transition = 'opacity .3s';
+    el.style.opacity = '0';
+    setTimeout(() => el.remove(), 300);
+  }, duration);
+}
+
 async function saveUIPreference(changes) {
   try {
     await api('/api/profile/preferences', { method: 'PUT', body: JSON.stringify(changes) });
-  } catch (e) {}
+  } catch (e) { /* sessizce geç */ }
 }
 
 async function logout() {
-  await api('/auth/logout', { method: 'POST', body: JSON.stringify({}) });
+  try {
+    await api('/auth/logout', { method: 'POST', body: JSON.stringify({}) });
+  } catch (e) { /* devam et */ }
   location.href = '/login';
 }
 
@@ -42,15 +65,26 @@ document.addEventListener('DOMContentLoaded', () => {
   tickClock();
   setInterval(tickClock, 1000);
 
-  const shell = document.getElementById('appShell');
-  const toggleSidebar = document.getElementById('toggleSidebar');
+  const shell       = document.getElementById('appShell');
+  const toggleBtn   = document.getElementById('toggleSidebar');
+  const closeBtn    = document.getElementById('sidebarCloseBtn');
   const toggleTheme = document.getElementById('toggleTheme');
 
-  if (toggleSidebar) {
-    toggleSidebar.addEventListener('click', async () => {
-      shell.classList.toggle('sidebar-collapsed');
-      await saveUIPreference({ sidebar_collapsed: shell.classList.contains('sidebar-collapsed') });
+  function setSidebarCollapsed(collapsed) {
+    shell.classList.toggle('sidebar-collapsed', collapsed);
+    saveUIPreference({ sidebar_collapsed: collapsed });
+  }
+
+  /* Topbar butonu: kapalıysa aç, açıksa kapat */
+  if (toggleBtn) {
+    toggleBtn.addEventListener('click', () => {
+      setSidebarCollapsed(!shell.classList.contains('sidebar-collapsed'));
     });
+  }
+
+  /* Sidebar içindeki kapat butonu */
+  if (closeBtn) {
+    closeBtn.addEventListener('click', () => setSidebarCollapsed(true));
   }
 
   if (toggleTheme) {
@@ -58,7 +92,10 @@ document.addEventListener('DOMContentLoaded', () => {
       const html = document.documentElement;
       const next = html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
       html.setAttribute('data-theme', next);
+      toggleTheme.textContent = next === 'dark' ? '☀' : '🌙';
       await saveUIPreference({ dark_mode: next === 'dark' });
     });
+    const current = document.documentElement.getAttribute('data-theme');
+    toggleTheme.textContent = current === 'dark' ? '☀' : '🌙';
   }
 });

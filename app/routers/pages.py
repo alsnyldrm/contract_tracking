@@ -41,6 +41,7 @@ def _protected_context(request: Request, db: Session):
         'timezone': get_timezone(db),
         'now_local': now_local(db),
         'csrf_token': request.cookies.get(settings.csrf_cookie_name, ''),
+        'current_path': request.url.path,
     }
 
 

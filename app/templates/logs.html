@@ -12,4 +12,15 @@
 </div>
 <div class="panel" style="max-height:560px;overflow:auto;"><table class="table" id="logTable"><thead><tr><th>Zaman</th><th>Seviye</th><th>Modül</th><th>Mesaj</th><th>Detay</th></tr></thead><tbody></tbody></table></div>
 {% endblock %}
+<!-- Log detay modalı -->
+<div class="modal" id="logDetailModal">
+  <div class="modal-content wide">
+    <div class="modal-header">
+      <h3>Log Detayı</h3>
+      <button class="modal-close" onclick="document.getElementById('logDetailModal').classList.remove('open')">&#10005;</button>
+    </div>
+    <pre id="logDetailContent" style="background:var(--bg);padding:12px;border-radius:8px;font-size:12px;overflow:auto;max-height:400px;white-space:pre-wrap;word-break:break-all"></pre>
+  </div>
+</div>
+{% endblock %}
 {% block scripts %}<script src="/static/js/logs.js"></script>{% endblock %}
