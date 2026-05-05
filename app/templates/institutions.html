@@ -1,21 +1,128 @@
 {% extends 'base.html' %}
+{% block title %}Kurumlar — Contract Tracking{% endblock %}
 {% block page_title %}Kurumlar{% endblock %}
+
 {% block content %}
-<div class="toolbar">
-  <input id="q" placeholder="Kurum ara" />
-  {% if user.role.name == 'admin' %}<button class="btn btn-primary" onclick="openInstitutionModal()">Yeni Kurum</button>{% endif %}
-</div>
 <div class="panel">
-  <table class="table" id="institutionTable"><thead><tr><th>Kurum Adı</th><th>Kısa Ad</th><th>Yetkili</th><th>Durum</th><th>İşlem</th></tr></thead><tbody></tbody></table>
+  <div class="toolbar">
+    <input class="input-sm" id="q" placeholder="🔍 Kurum ara..." style="max-width:260px" oninput="debounceInst()" />
+    <select class="select-sm" id="typeFilter" onchange="loadInstitutions()">
+      <option value="">Tüm Tipler</option>
+    </select>
+    <select class="select-sm" id="activeFilter" onchange="loadInstitutions()">
+      <option value="">Tüm Durumlar</option>
+      <option value="true">Aktif</option>
+      <option value="false">Pasif</option>
+    </select>
+    <div class="toolbar-right">
+      <button class="btn btn-sm" onclick="resetInstFilters()">Temizle</button>
+      {% if user.role.name == 'admin' %}
+      <button class="btn btn-primary" onclick="openInstitutionModal()">+ Yeni Kurum</button>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table class="table" id="institutionTable">
+      <thead>
+        <tr>
+          <th>Kurum Adı</th>
+          <th>Kısa Ad</th>
+          <th>Tip</th>
+          <th>Vergi No</th>
+          <th>Yetkili Kişi</th>
+          <th>Yetkili E-posta</th>
+          <th>Telefon</th>
+          <th>Durum</th>
+          <th>İşlemler</th>
+        </tr>
+      </thead>
+      <tbody id="institutionTbody">
+        <tr class="loading-row"><td colspan="9"><div class="spinner"></div></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div id="instPagination" class="pagination"></div>
 </div>
-<div class="modal" id="institutionModal"><div class="modal-content">
-  <h3>Kurum Kaydı</h3>
-  <input id="i_name" placeholder="Kurum adı" />
-  <input id="i_short_name" placeholder="Kısa ad" />
-  <input id="i_contact_person" placeholder="Yetkili kişi" />
-  <input id="i_contact_email" placeholder="Yetkili e-posta" />
-  <textarea id="i_description" placeholder="Açıklama"></textarea>
-  <div class="modal-actions"><button class="btn" onclick="closeInstitutionModal()">Kapat</button><button class="btn btn-primary" onclick="saveInstitution()">Kaydet</button></div>
-</div></div>
+
+<!-- Kurum Modal -->
+<div class="modal" id="institutionModal">
+  <div class="modal-content wide">
+    <div class="modal-header">
+      <h3 id="instModalTitle">Yeni Kurum</h3>
+      <button class="modal-close" onclick="closeInstitutionModal()">✕</button>
+    </div>
+
+    <div class="modal-section-title">Temel Bilgiler</div>
+    <div class="form-grid">
+      <div class="field">
+        <label>Kurum Adı <span style="color:var(--danger)">*</span></label>
+        <input id="i_name" placeholder="Tam kurum adı" />
+      </div>
+      <div class="field">
+        <label>Kısa Ad</label>
+        <input id="i_short_name" placeholder="Kısa ad / kısaltma" />
+      </div>
+      <div class="field">
+        <label>Vergi Numarası</label>
+        <input id="i_tax_no" placeholder="1234567890" />
+      </div>
+      <div class="field">
+        <label>Vergi Dairesi</label>
+        <input id="i_tax_office" placeholder="Vergi dairesi adı" />
+      </div>
+      <div class="field">
+        <label>Kurum Tipi</label>
+        <select id="i_institution_type_id">
+          <option value="">Tip seçiniz</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Sektör</label>
+        <input id="i_sector" placeholder="Sektör bilgisi" />
+      </div>
+    </div>
+
+    <div class="modal-section-title">Yetkili Bilgileri</div>
+    <div class="form-grid">
+      <div class="field">
+        <label>Yetkili Kişi</label>
+        <input id="i_contact_person" placeholder="Ad Soyad" />
+      </div>
+      <div class="field">
+        <label>Yetkili E-posta</label>
+        <input type="email" id="i_contact_email" placeholder="yetkili@kurum.com" />
+      </div>
+      <div class="field">
+        <label>Yetkili Telefon</label>
+        <input id="i_contact_phone" placeholder="+90 XXX XXX XX XX" />
+      </div>
+      <div class="field" style="padding-top:24px">
+        <label class="checkbox-label">
+          <input type="checkbox" id="i_is_active" checked />
+          Aktif Kurum
+        </label>
+      </div>
+    </div>
+
+    <div class="modal-section-title">Ek Bilgiler</div>
+    <div class="field">
+      <label>Adres</label>
+      <textarea id="i_address" placeholder="Kurum adresi" style="min-height:68px"></textarea>
+    </div>
+    <div class="field">
+      <label>Açıklama</label>
+      <textarea id="i_description" placeholder="Kurum hakkında açıklama..." style="min-height:68px"></textarea>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn" onclick="closeInstitutionModal()">İptal</button>
+      {% if user.role.name == 'admin' %}
+      <button class="btn btn-primary" id="instSaveBtn" onclick="saveInstitution()">Kaydet</button>
+      {% endif %}
+    </div>
+  </div>
+</div>
 {% endblock %}
+
 {% block scripts %}<script src="/static/js/institutions.js"></script>{% endblock %}

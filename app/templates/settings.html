@@ -1,21 +1,306 @@
 {% extends 'base.html' %}
+{% block title %}Ayarlar — Contract Tracking{% endblock %}
 {% block page_title %}Ayarlar{% endblock %}
+
 {% block content %}
-<div class="tabs">
-  <button class="tab-btn active" data-tab="general">Genel</button>
-  <button class="tab-btn" data-tab="timezone">Time Zone</button>
-  <button class="tab-btn" data-tab="ldap">LDAPS</button>
-  <button class="tab-btn" data-tab="saml">SAML</button>
-  <button class="tab-btn" data-tab="smtp">SMTP / Bildirim</button>
-  <button class="tab-btn" data-tab="reports">Raporlar</button>
-  <button class="tab-btn" data-tab="logs">Log Ayarları</button>
+<div class="tabs" id="settingsTabs">
+  <button class="tab-btn active" data-tab="general">⚙ Genel</button>
+  <button class="tab-btn" data-tab="timezone">🕐 Zaman Dilimi</button>
+  <button class="tab-btn" data-tab="ldap">🔗 LDAPS</button>
+  <button class="tab-btn" data-tab="saml">🔑 SAML / SSO</button>
+  <button class="tab-btn" data-tab="smtp">📧 SMTP / Bildirim</button>
+  <button class="tab-btn" data-tab="reports">📊 Rapor Modülleri</button>
+  <button class="tab-btn" data-tab="logs">📋 Log Ayarları</button>
 </div>
-<div class="tab-panel active" id="tab-general"><div class="panel"><h3>Genel Ayarlar</h3><p>Temel uygulama parametreleri bu alanda yönetilir.</p></div></div>
-<div class="tab-panel" id="tab-timezone"><div class="panel"><h3>Time Zone</h3><input id="timezone" /><button class="btn btn-primary" onclick="saveTimezone()">Kaydet</button></div></div>
-<div class="tab-panel" id="tab-ldap"><div class="panel"><h3>LDAPS</h3><div class="form-grid"><input id="ldap_server_address" placeholder="Sunucu adresi" /><input id="ldap_port" placeholder="Port" /><input id="ldap_base_dn" placeholder="Base DN" /><input id="ldap_bind_dn" placeholder="Bind DN" /><input id="ldap_bind_password" placeholder="Bind password" /><input id="ldap_user_search_filter" placeholder="User search filter" /><input id="ldap_group_search_filter" placeholder="Group search filter" /><input id="ldap_timeout_seconds" placeholder="Timeout" /></div><label><input type="checkbox" id="ldap_tls_enabled" /> TLS/SSL aktif</label><label><input type="checkbox" id="ldap_verify_cert" /> Sertifika doğrulama aktif</label><div class="toolbar"><button class="btn btn-primary" onclick="saveLdap()">Kaydet</button><button class="btn" onclick="testLdap()">Test Bağlantısı</button></div><div id="ldapTestResult"></div></div></div>
-<div class="tab-panel" id="tab-saml"><div class="panel"><h3>SAML</h3><div class="form-grid"><input id="saml_entity_id" placeholder="Entity ID" /><input id="saml_sso_url" placeholder="SSO URL" /><input id="saml_slo_url" placeholder="SLO URL" /><input id="saml_email_attribute" placeholder="Email attribute" /><input id="saml_display_name_attribute" placeholder="Display name attribute" /><input id="saml_nameid_mapping" placeholder="NameID mapping" /></div><textarea id="saml_x509_certificate" placeholder="X.509 certificate"></textarea><textarea id="saml_attribute_mapping" placeholder='{"email":"mail"}'></textarea><textarea id="saml_role_mapping" placeholder='{"admin":"admin"}'></textarea><label><input type="checkbox" id="saml_enabled" /> SAML aktif</label><button class="btn btn-primary" onclick="saveSaml()">Kaydet</button></div></div>
-<div class="tab-panel" id="tab-smtp"><div class="panel"><h3>SMTP</h3><div class="form-grid"><input id="smtp_host" placeholder="SMTP host" /><input id="smtp_port" placeholder="SMTP port" /><input id="smtp_username" placeholder="SMTP kullanıcı" /><input id="smtp_password" placeholder="SMTP şifre" /><input id="smtp_sender_email" placeholder="Gönderen e-posta" /></div><label><input type="checkbox" id="smtp_tls_ssl" /> TLS/SSL</label><div class="toolbar"><button class="btn btn-primary" onclick="saveSmtp()">Kaydet</button><button class="btn" onclick="testSmtp()">Test Mail</button></div><div id="smtpResult"></div></div></div>
-<div class="tab-panel" id="tab-reports"><div class="panel"><h3>Rapor Modülü Ayarları</h3><p>Rapor modüllerini Raporlar ekranından aktif/pasif yapabilirsiniz.</p></div></div>
-<div class="tab-panel" id="tab-logs"><div class="panel"><h3>Log Ayarları</h3><input id="log_max_file_size_mb" placeholder="Maks dosya boyutu MB" /><input id="log_retention_days" placeholder="Saklama günü" /><input id="log_auto_refresh_seconds" placeholder="Oto yenileme saniye" /><button class="btn btn-primary" onclick="saveLogSettings()">Kaydet</button></div></div>
+
+<!-- GENEL -->
+<div class="tab-panel active" id="tab-general">
+  <div class="panel">
+    <div class="panel-header">
+      <h3>Genel Ayarlar</h3>
+    </div>
+    <div style="max-width:560px">
+      <div class="field">
+        <label>Uygulama Adı</label>
+        <input id="gen_app_name" value="Contract Tracking" />
+        <div class="form-hint">Uygulama başlığında görünen ad</div>
+      </div>
+      <div class="field">
+        <label>Dosya Yükleme Boyut Limiti (MB)</label>
+        <input type="number" id="gen_max_upload_mb" placeholder="50" min="1" max="500" />
+      </div>
+      <div class="field">
+        <label>Varsayılan Hatırlatma Günü</label>
+        <select id="gen_default_reminder">
+          <option value="7">7 gün</option>
+          <option value="15">15 gün</option>
+          <option value="30" selected>30 gün</option>
+          <option value="60">60 gün</option>
+          <option value="90">90 gün</option>
+        </select>
+      </div>
+      <button class="btn btn-primary" onclick="saveGeneral()">Kaydet</button>
+    </div>
+  </div>
+</div>
+
+<!-- TİMEZONE -->
+<div class="tab-panel" id="tab-timezone">
+  <div class="panel">
+    <div class="panel-header">
+      <h3>Zaman Dilimi Ayarları</h3>
+    </div>
+    <div style="max-width:440px">
+      <div class="field">
+        <label>Sistem Zaman Dilimi</label>
+        <select id="timezone">
+          <option value="Europe/Istanbul">Europe/Istanbul (UTC+3) — Türkiye</option>
+          <option value="UTC">UTC (Koordineli Evrensel Saat)</option>
+          <option value="Europe/London">Europe/London (UTC+0/+1)</option>
+          <option value="Europe/Berlin">Europe/Berlin (UTC+1/+2)</option>
+          <option value="Europe/Paris">Europe/Paris (UTC+1/+2)</option>
+          <option value="America/New_York">America/New_York (UTC-5/-4)</option>
+          <option value="America/Los_Angeles">America/Los_Angeles (UTC-8/-7)</option>
+          <option value="Asia/Dubai">Asia/Dubai (UTC+4)</option>
+          <option value="Asia/Riyadh">Asia/Riyadh (UTC+3)</option>
+          <option value="Asia/Tokyo">Asia/Tokyo (UTC+9)</option>
+        </select>
+        <div class="form-hint">Tüm tarih/saat gösterimleri bu ayara göre yapılır. DB'de UTC olarak saklanır.</div>
+      </div>
+      <div class="alert alert-info" style="margin-bottom:14px">
+        <span>ℹ</span>
+        <span>Mevcut saat: <strong id="currentTzTime">—</strong></span>
+      </div>
+      <button class="btn btn-primary" onclick="saveTimezone()">Kaydet</button>
+    </div>
+  </div>
+</div>
+
+<!-- LDAPS -->
+<div class="tab-panel" id="tab-ldap">
+  <div class="panel">
+    <div class="panel-header">
+      <h3>LDAPS / Active Directory Bağlantısı</h3>
+    </div>
+    <div class="alert alert-info" style="margin-bottom:16px">
+      <span>ℹ</span>
+      <span>Sözleşme sorumlu personel alanında otomatik tamamlama için AD bağlantısı gerekir. Bağlantı yoksa manuel giriş yapılabilir.</span>
+    </div>
+    <div style="max-width:700px">
+      <div class="form-grid">
+        <div class="field">
+          <label>LDAP/LDAPS Sunucu Adresi</label>
+          <input id="ldap_server_address" placeholder="ldaps://dc.kurum.local" />
+        </div>
+        <div class="field">
+          <label>Port</label>
+          <input type="number" id="ldap_port" placeholder="636" min="1" max="65535" />
+          <div class="form-hint">LDAP: 389 | LDAPS: 636</div>
+        </div>
+        <div class="field">
+          <label>Base DN</label>
+          <input id="ldap_base_dn" placeholder="DC=kurum,DC=local" />
+        </div>
+        <div class="field">
+          <label>Bind DN</label>
+          <input id="ldap_bind_dn" placeholder="CN=ServiceUser,OU=Service,DC=kurum,DC=local" />
+        </div>
+        <div class="field">
+          <label>Bind Password</label>
+          <input type="password" id="ldap_bind_password" placeholder="••••••••" autocomplete="new-password" />
+          <div class="form-hint">Boş bırakılırsa mevcut şifre korunur</div>
+        </div>
+        <div class="field">
+          <label>Timeout (saniye)</label>
+          <input type="number" id="ldap_timeout_seconds" placeholder="5" min="1" max="60" />
+        </div>
+        <div class="field col-span-2">
+          <label>Kullanıcı Arama Filtresi</label>
+          <input id="ldap_user_search_filter" placeholder="(|(sAMAccountName=*{query}*)(displayName=*{query}*)(mail=*{query}*))" />
+          <div class="form-hint">{query} arama terimiyle değiştirilir</div>
+        </div>
+        <div class="field col-span-2">
+          <label>Grup Arama Filtresi (opsiyonel)</label>
+          <input id="ldap_group_search_filter" placeholder="(objectClass=group)" />
+        </div>
+      </div>
+
+      <div style="display:flex;gap:20px;margin-bottom:16px">
+        <label class="checkbox-label">
+          <input type="checkbox" id="ldap_tls_enabled" />
+          TLS/SSL Aktif
+        </label>
+        <label class="checkbox-label">
+          <input type="checkbox" id="ldap_verify_cert" />
+          Sertifika Doğrulama Aktif
+        </label>
+      </div>
+
+      <div class="toolbar" style="margin-bottom:0">
+        <button class="btn btn-primary" onclick="saveLdap()">Ayarları Kaydet</button>
+        <button class="btn" onclick="testLdap()">🔌 Bağlantıyı Test Et</button>
+      </div>
+      <div id="ldapTestResult" style="display:none;margin-top:10px"></div>
+    </div>
+  </div>
+</div>
+
+<!-- SAML -->
+<div class="tab-panel" id="tab-saml">
+  <div class="panel">
+    <div class="panel-header">
+      <h3>SAML / Microsoft Entra ID (SSO)</h3>
+    </div>
+    <div style="margin-bottom:14px">
+      <label class="checkbox-label" style="font-size:14px">
+        <input type="checkbox" id="saml_enabled" />
+        <strong>SAML ile Giriş Aktif</strong>
+      </label>
+      <div class="form-hint" style="margin-top:4px">Pasif olduğunda login ekranında Microsoft Entra ID butonu görünmez</div>
+    </div>
+    <div style="max-width:700px">
+      <div class="form-grid">
+        <div class="field col-span-2">
+          <label>SP Entity ID (Service Provider)</label>
+          <input id="saml_entity_id" placeholder="https://uygulamaniz.com/auth/saml/metadata" />
+          <div class="form-hint">IdP'ye kayıt edilen SP Entity ID'niz</div>
+        </div>
+        <div class="field col-span-2">
+          <label>SSO URL (Identity Provider)</label>
+          <input id="saml_sso_url" placeholder="https://login.microsoftonline.com/TENANT_ID/saml2" />
+        </div>
+        <div class="field col-span-2">
+          <label>SLO URL (Single Logout)</label>
+          <input id="saml_slo_url" placeholder="https://login.microsoftonline.com/TENANT_ID/saml2" />
+        </div>
+        <div class="field">
+          <label>E-posta Attribute</label>
+          <input id="saml_email_attribute" placeholder="http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress" />
+        </div>
+        <div class="field">
+          <label>Görünen Ad Attribute</label>
+          <input id="saml_display_name_attribute" placeholder="http://schemas.microsoft.com/identity/claims/displayname" />
+        </div>
+        <div class="field col-span-2">
+          <label>NameID Mapping</label>
+          <input id="saml_nameid_mapping" placeholder="urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress" />
+        </div>
+        <div class="field col-span-2">
+          <label>X.509 Sertifikası (IdP Public Certificate)</label>
+          <textarea id="saml_x509_certificate" placeholder="-----BEGIN CERTIFICATE-----&#10;MIICpDCCAYwCCQD...&#10;-----END CERTIFICATE-----" style="min-height:100px;font-family:monospace;font-size:12px"></textarea>
+          <div class="form-hint">Boş bırakılırsa mevcut sertifika korunur</div>
+        </div>
+        <div class="field col-span-2">
+          <label>Attribute Mapping (JSON)</label>
+          <textarea id="saml_attribute_mapping" placeholder='{"email": "http://schemas...emailaddress", "name": "http://schemas...name"}' style="min-height:72px;font-family:monospace;font-size:12px"></textarea>
+        </div>
+        <div class="field col-span-2">
+          <label>Rol Mapping (JSON — opsiyonel)</label>
+          <textarea id="saml_role_mapping" placeholder='{"Administrators": "admin"}' style="min-height:60px;font-family:monospace;font-size:12px"></textarea>
+          <div class="form-hint">Eşleşme yoksa kullanıcı varsayılan olarak <strong>readonly</strong> rolü alır</div>
+        </div>
+      </div>
+      <button class="btn btn-primary" onclick="saveSaml()">SAML Ayarlarını Kaydet</button>
+    </div>
+  </div>
+</div>
+
+<!-- SMTP -->
+<div class="tab-panel" id="tab-smtp">
+  <div class="panel">
+    <div class="panel-header">
+      <h3>SMTP / E-posta Bildirim Ayarları</h3>
+    </div>
+    <div style="max-width:600px">
+      <div class="form-grid">
+        <div class="field">
+          <label>SMTP Host</label>
+          <input id="smtp_host" placeholder="smtp.office365.com" />
+        </div>
+        <div class="field">
+          <label>SMTP Port</label>
+          <input type="number" id="smtp_port" placeholder="587" min="1" max="65535" />
+        </div>
+        <div class="field">
+          <label>Kullanıcı Adı</label>
+          <input id="smtp_username" placeholder="bildirim@kurum.com" />
+        </div>
+        <div class="field">
+          <label>Şifre</label>
+          <input type="password" id="smtp_password" placeholder="••••••••" autocomplete="new-password" />
+          <div class="form-hint">Boş bırakılırsa mevcut şifre korunur</div>
+        </div>
+        <div class="field col-span-2">
+          <label>Gönderen E-posta</label>
+          <input id="smtp_sender_email" placeholder="noreply@kurum.com" />
+        </div>
+      </div>
+      <div style="margin-bottom:16px">
+        <label class="checkbox-label">
+          <input type="checkbox" id="smtp_tls_ssl" />
+          TLS/SSL Aktif (STARTTLS)
+        </label>
+      </div>
+      <div class="toolbar" style="margin-bottom:0">
+        <button class="btn btn-primary" onclick="saveSmtp()">Ayarları Kaydet</button>
+        <button class="btn" onclick="testSmtp()">📧 Test Mail Gönder</button>
+      </div>
+      <div id="smtpResult" style="display:none;margin-top:10px"></div>
+    </div>
+  </div>
+</div>
+
+<!-- RAPOR MODÜLLERİ -->
+<div class="tab-panel" id="tab-reports">
+  <div class="panel">
+    <div class="panel-header">
+      <h3>Rapor Modülü Yönetimi</h3>
+    </div>
+    <p style="font-size:13px;color:var(--muted);margin-top:0">
+      Aktif modüller Raporlar sayfasında görünür. Pasif modüller çalıştırılamaz.
+    </p>
+    <div class="table-wrap">
+      <table class="table" id="reportModulesSettingsTable">
+        <thead>
+          <tr>
+            <th>Rapor Adı</th>
+            <th>Kod</th>
+            <th>Durum</th>
+            <th>İşlem</th>
+          </tr>
+        </thead>
+        <tbody id="reportModulesSettingsTbody">
+          <tr class="loading-row"><td colspan="4"><div class="spinner"></div></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- LOG AYARLARI -->
+<div class="tab-panel" id="tab-logs">
+  <div class="panel">
+    <div class="panel-header">
+      <h3>Log Ayarları</h3>
+    </div>
+    <div style="max-width:440px">
+      <div class="field">
+        <label>Maksimum Log Dosya Boyutu (MB)</label>
+        <input type="number" id="log_max_file_size_mb" placeholder="20" min="1" max="1000" />
+      </div>
+      <div class="field">
+        <label>Log Saklama Süresi (gün)</label>
+        <input type="number" id="log_retention_days" placeholder="30" min="1" max="365" />
+      </div>
+      <div class="field">
+        <label>Otomatik Yenileme Süresi (saniye)</label>
+        <input type="number" id="log_auto_refresh_seconds" placeholder="5" min="1" max="60" />
+        <div class="form-hint">Log izleme ekranında otomatik yenileme aralığı</div>
+      </div>
+      <button class="btn btn-primary" onclick="saveLogSettings()">Kaydet</button>
+    </div>
+  </div>
+</div>
+
 {% endblock %}
 {% block scripts %}<script src="/static/js/settings.js"></script>{% endblock %}

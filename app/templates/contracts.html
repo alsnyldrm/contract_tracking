@@ -1,28 +1,266 @@
 {% extends 'base.html' %}
+{% block title %}Sözleşmeler — Contract Tracking{% endblock %}
 {% block page_title %}Sözleşmeler{% endblock %}
+
 {% block content %}
-<div class="toolbar">
-  <input id="search" placeholder="Sözleşme ara" />
-  <select id="statusFilter"><option value="">Durum (Tümü)</option><option>Taslak</option><option>Aktif</option><option>Yaklaşıyor</option><option>Süresi Doldu</option><option>İptal</option><option>Yenilendi</option></select>
-  {% if user.role.name == 'admin' %}<button class="btn btn-primary" onclick="openContractModal()">Yeni Sözleşme</button>{% endif %}
-</div>
+<!-- Filtre ve araç çubuğu -->
 <div class="panel">
-  <table class="table" id="contractTable"><thead><tr><th>No</th><th>Kurum</th><th>Ad</th><th>Durum</th><th>Kritik</th><th>Bitiş</th><th>İşlem</th></tr></thead><tbody></tbody></table>
-</div>
-<div class="modal" id="contractModal"><div class="modal-content wide">
-  <h3>Sözleşme Kaydı</h3>
-  <div class="form-grid">
-    <input id="c_contract_number" placeholder="Sözleşme numarası" />
-    <input id="c_contract_name" placeholder="Sözleşme adı" />
-    <select id="c_institution_id"></select>
-    <select id="c_status"><option>Taslak</option><option>Aktif</option><option>Yaklaşıyor</option><option>Süresi Doldu</option><option>İptal</option><option>Yenilendi</option></select>
-    <select id="c_critical_level"><option>Düşük</option><option>Orta</option><option>Yüksek</option><option>Kritik</option></select>
-    <input type="date" id="c_end_date" />
-    <input id="c_responsible_person_name" placeholder="Sorumlu personel" />
-    <input id="c_tags" placeholder="Etiketler (virgülle)" />
+  <div class="toolbar">
+    <input class="input-sm" id="search" placeholder="🔍 Sözleşme / Kurum / No ara..." style="max-width:260px"
+           oninput="debounceLoad()" />
+    <select class="select-sm" id="institutionFilter" onchange="loadContracts()">
+      <option value="">Tüm Kurumlar</option>
+    </select>
+    <select class="select-sm" id="typeFilter" onchange="loadContracts()">
+      <option value="">Tüm Türler</option>
+    </select>
+    <select class="select-sm" id="statusFilter" onchange="loadContracts()">
+      <option value="">Tüm Durumlar</option>
+      <option>Taslak</option><option>Aktif</option><option>Yaklaşıyor</option>
+      <option>Süresi Doldu</option><option>İptal</option><option>Yenilendi</option>
+    </select>
+    <select class="select-sm" id="criticalFilter" onchange="loadContracts()">
+      <option value="">Tüm Kritiklik</option>
+      <option>Düşük</option><option>Orta</option><option>Yüksek</option><option>Kritik</option>
+    </select>
+    <select class="select-sm" id="expiringFilter" onchange="loadContracts()">
+      <option value="">Bitiş (Tümü)</option>
+      <option value="7">7 Gün</option>
+      <option value="30">30 Gün</option>
+      <option value="60">60 Gün</option>
+      <option value="90">90 Gün</option>
+    </select>
+    <div class="toolbar-right">
+      <button class="btn btn-sm" onclick="resetFilters()">Temizle</button>
+      {% if user.role.name == 'admin' %}
+      <button class="btn btn-primary" onclick="openContractModal()">+ Yeni Sözleşme</button>
+      {% endif %}
+    </div>
   </div>
-  <textarea id="c_description" placeholder="Açıklama"></textarea>
-  <div class="modal-actions"><button class="btn" onclick="closeContractModal()">Kapat</button><button class="btn btn-primary" onclick="saveContract()">Kaydet</button></div>
-</div></div>
+
+  <!-- Tablo -->
+  <div class="table-wrap">
+    <table class="table" id="contractTable">
+      <thead>
+        <tr>
+          <th class="sortable" onclick="sortBy('contract_number')">No <span class="sort-icon"></span></th>
+          <th class="sortable" onclick="sortBy('contract_name')">Sözleşme Adı <span class="sort-icon"></span></th>
+          <th>Kurum</th>
+          <th>Tür</th>
+          <th class="sortable" onclick="sortBy('status')">Durum <span class="sort-icon"></span></th>
+          <th class="sortable" onclick="sortBy('critical_level')">Kritik <span class="sort-icon"></span></th>
+          <th class="sortable" onclick="sortBy('end_date')">Bitiş <span class="sort-icon"></span></th>
+          <th class="sortable" onclick="sortBy('amount')">Tutar <span class="sort-icon"></span></th>
+          <th>Sorumlu</th>
+          <th>İşlemler</th>
+        </tr>
+      </thead>
+      <tbody id="contractTbody">
+        <tr class="loading-row"><td colspan="10"><div class="spinner"></div></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div id="contractPagination" class="pagination"></div>
+</div>
+
+<!-- Sözleşme Modal -->
+<div class="modal" id="contractModal">
+  <div class="modal-content xlwide">
+    <div class="modal-header">
+      <h3 id="contractModalTitle">Yeni Sözleşme</h3>
+      <button class="modal-close" onclick="closeContractModal()">✕</button>
+    </div>
+
+    <!-- Temel Bilgiler -->
+    <div class="modal-section-title">Temel Bilgiler</div>
+    <div class="form-grid">
+      <div class="field">
+        <label>Sözleşme Numarası <span style="color:var(--danger)">*</span></label>
+        <input id="c_contract_number" placeholder="SZ-2025-001" />
+      </div>
+      <div class="field">
+        <label>Sözleşme Adı <span style="color:var(--danger)">*</span></label>
+        <input id="c_contract_name" placeholder="Sözleşme adını giriniz" />
+      </div>
+      <div class="field">
+        <label>Kurum <span style="color:var(--danger)">*</span></label>
+        <select id="c_institution_id">
+          <option value="">Kurum seçiniz</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Sözleşme Türü</label>
+        <select id="c_contract_type_id">
+          <option value="">Tür seçiniz</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Tarihler -->
+    <div class="modal-section-title">Tarih Bilgileri</div>
+    <div class="form-grid-3">
+      <div class="field">
+        <label>Başlangıç Tarihi</label>
+        <input type="date" id="c_start_date" />
+      </div>
+      <div class="field">
+        <label>Bitiş Tarihi</label>
+        <input type="date" id="c_end_date" />
+      </div>
+      <div class="field">
+        <label>İmza Tarihi</label>
+        <input type="date" id="c_signed_date" />
+      </div>
+      <div class="field">
+        <label>Yenileme Tarihi</label>
+        <input type="date" id="c_renewal_date" />
+      </div>
+      <div class="field">
+        <label>Hatırlatma</label>
+        <select id="c_reminder_days">
+          <option value="7">7 gün önce</option>
+          <option value="15">15 gün önce</option>
+          <option value="30" selected>30 gün önce</option>
+          <option value="60">60 gün önce</option>
+          <option value="90">90 gün önce</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Fesih Bildirim Süresi (gün)</label>
+        <input type="number" id="c_termination_notice_days" placeholder="30" min="0" />
+      </div>
+    </div>
+
+    <!-- Finansal -->
+    <div class="modal-section-title">Finansal Bilgiler</div>
+    <div class="form-grid">
+      <div class="field">
+        <label>Sözleşme Tutarı</label>
+        <input type="number" id="c_amount" placeholder="0.00" step="0.01" min="0" />
+      </div>
+      <div class="field">
+        <label>Para Birimi</label>
+        <select id="c_currency_id">
+          <option value="">Para birimi seçiniz</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Ödeme Periyodu</label>
+        <select id="c_payment_period">
+          <option value="">Seçiniz</option>
+          <option>Aylık</option><option>3 Aylık</option><option>6 Aylık</option>
+          <option>Yıllık</option><option>Peşin</option><option>Diğer</option>
+        </select>
+      </div>
+      <div class="field" style="display:flex;align-items:center;gap:16px;padding-top:26px">
+        <label class="checkbox-label">
+          <input type="checkbox" id="c_vat_included" />
+          KDV Dahil
+        </label>
+        <label class="checkbox-label">
+          <input type="checkbox" id="c_auto_renewal" />
+          Otomatik Yenileme
+        </label>
+      </div>
+    </div>
+
+    <!-- Durum ve Sınıflandırma -->
+    <div class="modal-section-title">Durum ve Sınıflandırma</div>
+    <div class="form-grid">
+      <div class="field">
+        <label>Durum</label>
+        <select id="c_status">
+          <option>Taslak</option><option>Aktif</option><option>Yaklaşıyor</option>
+          <option>Süresi Doldu</option><option>İptal</option><option>Yenilendi</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Kritik Seviye</label>
+        <select id="c_critical_level">
+          <option>Düşük</option><option>Orta</option><option>Yüksek</option><option>Kritik</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Etiketler</label>
+        <input id="c_tags" placeholder="Etiket1, Etiket2, Etiket3" />
+        <div class="form-hint">Virgülle ayırarak birden fazla etiket girebilirsiniz</div>
+      </div>
+      <div class="field" id="c_tags_preview" style="padding-top:22px"></div>
+    </div>
+
+    <!-- Sorumlu Personel -->
+    <div class="modal-section-title">Sorumlu Personel</div>
+    <div class="form-grid">
+      <div class="field autocomplete-wrap">
+        <label>Ad Soyad</label>
+        <input id="c_responsible_person_name" placeholder="İsim yazın veya AD'dan arayın..." autocomplete="off"
+               oninput="responsibleSearch(this.value)" />
+        <div class="autocomplete-dropdown" id="responsibleDropdown" style="display:none"></div>
+      </div>
+      <div class="field">
+        <label>E-posta</label>
+        <input type="email" id="c_responsible_person_email" placeholder="ornek@kurum.com" />
+      </div>
+      <div class="field">
+        <label>Kullanıcı Adı (sAMAccountName)</label>
+        <input id="c_responsible_person_username" placeholder="kullanici.adi" />
+      </div>
+      <div class="field">
+        <label>Departman</label>
+        <input id="c_responsible_department" placeholder="Departman adı" />
+      </div>
+    </div>
+
+    <!-- Notlar -->
+    <div class="modal-section-title">Açıklama ve Notlar</div>
+    <div class="form-grid">
+      <div class="field col-span-2">
+        <label>Açıklama</label>
+        <textarea id="c_description" placeholder="Sözleşme hakkında genel açıklama..."></textarea>
+      </div>
+      <div class="field col-span-2">
+        <label>İç Notlar</label>
+        <textarea id="c_internal_notes" placeholder="Dahili notlar (yalnızca yetkili kullanıcılar görebilir)..."></textarea>
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn" onclick="closeContractModal()">İptal</button>
+      {% if user.role.name == 'admin' %}
+      <button class="btn btn-primary" id="contractSaveBtn" onclick="saveContract()">Kaydet</button>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<!-- Belge Modal -->
+<div class="modal" id="documentModal">
+  <div class="modal-content wide">
+    <div class="modal-header">
+      <h3 id="docModalTitle">Belgeler</h3>
+      <button class="modal-close" onclick="closeDocModal()">✕</button>
+    </div>
+    <div id="docList" style="min-height:80px"></div>
+    {% if user.role.name == 'admin' %}
+    <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border)">
+      <label style="font-size:13px;font-weight:600;margin-bottom:8px;display:block">Yeni Belge Yükle</label>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <input type="file" id="docFileInput" accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg"
+               style="max-width:340px;font-size:12px" />
+        <button class="btn btn-primary" onclick="uploadDocument()">Yükle</button>
+      </div>
+      <div class="form-hint" style="margin-top:6px">Desteklenen: PDF, DOC, DOCX, XLS, XLSX, PNG, JPG, JPEG</div>
+      <div id="uploadProgress" style="display:none;margin-top:8px">
+        <div class="spinner" style="display:inline-block;margin-right:8px"></div>
+        <span style="font-size:13px;color:var(--muted)">Yükleniyor...</span>
+      </div>
+    </div>
+    {% endif %}
+    <div class="modal-actions">
+      <button class="btn" onclick="closeDocModal()">Kapat</button>
+    </div>
+  </div>
+</div>
 {% endblock %}
+
 {% block scripts %}<script src="/static/js/contracts.js"></script>{% endblock %}

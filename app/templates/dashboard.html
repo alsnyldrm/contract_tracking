@@ -1,14 +1,107 @@
 {% extends 'base.html' %}
+{% block title %}Dashboard — Contract Tracking{% endblock %}
 {% block page_title %}Dashboard{% endblock %}
+
 {% block content %}
-<div class="grid grid-5" id="widgetGrid"></div>
-<div class="panel">
-  <h3>Duruma Göre Sözleşmeler</h3>
-  <canvas id="statusChart" height="90"></canvas>
+<!-- Filtre çubuğu -->
+<div class="panel" style="margin-bottom:14px">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+    <span style="font-size:13px;font-weight:600;color:var(--muted)">FİLTRELER</span>
+    <button class="btn btn-sm" onclick="clearDashFilters()">Temizle</button>
+  </div>
+  <div class="toolbar" style="margin-bottom:0">
+    <input class="input-sm" id="dashSearch" placeholder="🔍 Sözleşme / Kurum ara..." style="max-width:240px" />
+    <select class="select-sm" id="dashInstitution"><option value="">Tüm Kurumlar</option></select>
+    <select class="select-sm" id="dashStatus">
+      <option value="">Tüm Durumlar</option>
+      <option>Taslak</option><option>Aktif</option><option>Yaklaşıyor</option>
+      <option>Süresi Doldu</option><option>İptal</option><option>Yenilendi</option>
+    </select>
+    <select class="select-sm" id="dashCritical">
+      <option value="">Tüm Kritiklik</option>
+      <option>Düşük</option><option>Orta</option><option>Yüksek</option><option>Kritik</option>
+    </select>
+    <select class="select-sm" id="dashExpiring">
+      <option value="">Bitiş Tarihi (Tümü)</option>
+      <option value="7">7 Gün İçinde</option>
+      <option value="30">30 Gün İçinde</option>
+      <option value="60">60 Gün İçinde</option>
+      <option value="90">90 Gün İçinde</option>
+    </select>
+    <button class="btn btn-primary btn-sm" onclick="loadDashboard()">Uygula</button>
+  </div>
 </div>
-<div class="panel">
-  <h3>En Yakın Bitiş Tarihli 10 Sözleşme</h3>
-  <table class="table" id="nearestTable"><thead><tr><th>Sözleşme</th><th>Bitiş</th><th>Durum</th></tr></thead><tbody></tbody></table>
+
+<!-- Widgets: 5 sütun x 3 satır = 15 widget -->
+<div class="grid grid-5" id="widgetGrid">
+  <div class="widget" style="grid-column:span 5;text-align:center;padding:24px;color:var(--muted)">
+    <div class="spinner"></div>
+    <p style="margin:8px 0 0;font-size:13px">Veriler yükleniyor…</p>
+  </div>
+</div>
+
+<!-- Grafikler: 3 sütun -->
+<div class="grid grid-3" style="margin-top:14px">
+  <div class="panel">
+    <div class="panel-header">
+      <h3>📊 Duruma Göre Sözleşmeler</h3>
+    </div>
+    <canvas id="statusChart" height="180"></canvas>
+  </div>
+  <div class="panel">
+    <div class="panel-header">
+      <h3>🏛 Kurum Tipine Göre Dağılım</h3>
+    </div>
+    <canvas id="institutionTypeChart" height="180"></canvas>
+  </div>
+  <div class="panel">
+    <div class="panel-header">
+      <h3>👤 Sorumlu Personele Göre</h3>
+    </div>
+    <canvas id="responsibleChart" height="180"></canvas>
+  </div>
+</div>
+
+<!-- Tablolar: 2 sütun -->
+<div class="grid grid-2" style="margin-top:14px">
+  <div class="panel">
+    <div class="panel-header">
+      <h3>⏰ En Yakın Bitiş Tarihli Sözleşmeler</h3>
+      <a href="/contracts?sort_by=end_date&sort_dir=asc" class="btn btn-sm">Tümü →</a>
+    </div>
+    <div class="table-wrap">
+      <table class="table" id="nearestTable">
+        <thead>
+          <tr>
+            <th>Sözleşme</th>
+            <th>Bitiş</th>
+            <th>Durum</th>
+            <th>Kritik</th>
+          </tr>
+        </thead>
+        <tbody><tr class="loading-row"><td colspan="4"><div class="spinner"></div></td></tr></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="panel-header">
+      <h3>🆕 Son Eklenen Sözleşmeler</h3>
+      <a href="/contracts" class="btn btn-sm">Tümü →</a>
+    </div>
+    <div class="table-wrap">
+      <table class="table" id="latestTable">
+        <thead>
+          <tr>
+            <th>Sözleşme</th>
+            <th>Oluşturulma</th>
+            <th>Durum</th>
+          </tr>
+        </thead>
+        <tbody><tr class="loading-row"><td colspan="3"><div class="spinner"></div></td></tr></tbody>
+      </table>
+    </div>
+  </div>
 </div>
 {% endblock %}
+
 {% block scripts %}<script src="/static/js/dashboard.js"></script>{% endblock %}
