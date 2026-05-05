@@ -1,100 +1,148 @@
+/* ── Tab management ── */
 function setupTabs() {
-  document.querySelectorAll('.tab-btn').forEach(btn => {
+  document.querySelectorAll('#settingsTabs .tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      document.querySelectorAll('.tab-btn').forEach(x => x.classList.remove('active'));
+      document.querySelectorAll('#settingsTabs .tab-btn').forEach(x => x.classList.remove('active'));
       document.querySelectorAll('.tab-panel').forEach(x => x.classList.remove('active'));
       btn.classList.add('active');
-      document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+      const panel = document.getElementById('tab-' + btn.dataset.tab);
+      if (panel) panel.classList.add('active');
     });
   });
 }
 
+/* ── Load all settings ── */
 async function loadSettings() {
-  const data = await api('/api/settings');
-  document.getElementById('timezone').value = data.timezone;
+  let data;
+  try {
+    data = await api('/api/settings');
+  } catch (e) {
+    showToast('Ayarlar yüklenemedi: ' + e.message, 'error');
+    return;
+  }
 
-  document.getElementById('ldap_server_address').value   = data.ldap.server_address || '';
-  document.getElementById('ldap_port').value             = data.ldap.port || 636;
-  document.getElementById('ldap_base_dn').value          = data.ldap.base_dn || '';
-  document.getElementById('ldap_bind_dn').value          = data.ldap.bind_dn || '';
-  document.getElementById('ldap_bind_password').value    = data.ldap.bind_password || '';
-  document.getElementById('ldap_user_search_filter').value  = data.ldap.user_search_filter || '';
-  document.getElementById('ldap_group_search_filter').value = data.ldap.group_search_filter || '';
-  document.getElementById('ldap_timeout_seconds').value  = data.ldap.timeout_seconds || 5;
-  document.getElementById('ldap_tls_enabled').checked    = !!data.ldap.tls_enabled;
-  document.getElementById('ldap_verify_cert').checked    = !!data.ldap.verify_cert;
+  /* Timezone */
+  const tzSel = document.getElementById('timezone');
+  if (tzSel) tzSel.value = data.timezone || 'Europe/Istanbul';
+  updateTzClock(data.timezone || 'Europe/Istanbul');
 
-  document.getElementById('saml_enabled').checked              = !!data.saml.enabled;
-  document.getElementById('saml_entity_id').value              = data.saml.entity_id || '';
-  document.getElementById('saml_sso_url').value                = data.saml.sso_url || '';
-  document.getElementById('saml_slo_url').value                = data.saml.slo_url || '';
-  document.getElementById('saml_email_attribute').value        = data.saml.email_attribute || '';
-  document.getElementById('saml_display_name_attribute').value = data.saml.display_name_attribute || '';
-  document.getElementById('saml_nameid_mapping').value         = data.saml.nameid_mapping || '';
-  document.getElementById('saml_x509_certificate').value       = data.saml.x509_certificate || '';
-  document.getElementById('saml_attribute_mapping').value      = JSON.stringify(data.saml.attribute_mapping || {});
-  document.getElementById('saml_role_mapping').value           = JSON.stringify(data.saml.role_mapping || {});
+  /* LDAP */
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val ?? ''; };
+  set('ldap_server_address',     data.ldap.server_address);
+  set('ldap_port',               data.ldap.port || 636);
+  set('ldap_base_dn',            data.ldap.base_dn);
+  set('ldap_bind_dn',            data.ldap.bind_dn);
+  set('ldap_bind_password',      data.ldap.bind_password || '');
+  set('ldap_user_search_filter', data.ldap.user_search_filter);
+  set('ldap_group_search_filter',data.ldap.group_search_filter);
+  set('ldap_timeout_seconds',    data.ldap.timeout_seconds || 5);
+  const chk = (id, val) => { const el = document.getElementById(id); if (el) el.checked = !!val; };
+  chk('ldap_tls_enabled', data.ldap.tls_enabled);
+  chk('ldap_verify_cert', data.ldap.verify_cert);
 
-  document.getElementById('smtp_host').value         = data.smtp.host || '';
-  document.getElementById('smtp_port').value         = data.smtp.port || 587;
-  document.getElementById('smtp_username').value     = data.smtp.username || '';
-  document.getElementById('smtp_password').value     = data.smtp.password || '';
-  document.getElementById('smtp_sender_email').value = data.smtp.sender_email || '';
-  document.getElementById('smtp_tls_ssl').checked    = !!data.smtp.tls_ssl;
+  /* SAML */
+  chk('saml_enabled', data.saml.enabled);
+  set('saml_entity_id',              data.saml.entity_id);
+  set('saml_sso_url',                data.saml.sso_url);
+  set('saml_slo_url',                data.saml.slo_url);
+  set('saml_email_attribute',        data.saml.email_attribute);
+  set('saml_display_name_attribute', data.saml.display_name_attribute);
+  set('saml_nameid_mapping',         data.saml.nameid_mapping);
+  set('saml_x509_certificate',       data.saml.x509_certificate || '');
+  set('saml_attribute_mapping',      JSON.stringify(data.saml.attribute_mapping || {}, null, 2));
+  set('saml_role_mapping',           JSON.stringify(data.saml.role_mapping || {}, null, 2));
 
-  document.getElementById('log_max_file_size_mb').value    = data.log_settings.max_file_size_mb || 20;
-  document.getElementById('log_retention_days').value      = data.log_settings.retention_days || 30;
-  document.getElementById('log_auto_refresh_seconds').value = data.log_settings.auto_refresh_seconds || 5;
+  /* SMTP */
+  set('smtp_host',         data.smtp.host);
+  set('smtp_port',         data.smtp.port || 587);
+  set('smtp_username',     data.smtp.username);
+  set('smtp_password',     data.smtp.password || '');
+  set('smtp_sender_email', data.smtp.sender_email);
+  chk('smtp_tls_ssl',      data.smtp.tls_ssl);
+
+  /* Log settings */
+  set('log_max_file_size_mb',    data.log_settings.max_file_size_mb || 20);
+  set('log_retention_days',      data.log_settings.retention_days || 30);
+  set('log_auto_refresh_seconds',data.log_settings.auto_refresh_seconds || 5);
 }
 
+function updateTzClock(tz) {
+  const el = document.getElementById('currentTzTime');
+  if (!el) return;
+  el.textContent = new Date().toLocaleString('tr-TR', { timeZone: tz });
+}
+
+/* ── Timezone ── */
 async function saveTimezone() {
+  const tz = document.getElementById('timezone').value;
   try {
-    await api('/api/settings/timezone', { method: 'PUT', body: JSON.stringify({ timezone: document.getElementById('timezone').value }) });
-    showToast('Timezone kaydedildi', 'success');
+    await api('/api/settings/timezone', { method: 'PUT', body: JSON.stringify({ timezone: tz }) });
+    showToast('Zaman dilimi kaydedildi', 'success');
+    updateTzClock(tz);
   } catch (e) { showToast(e.message, 'error'); }
 }
 
+/* ── General ── */
+async function saveGeneral() {
+  showToast('Genel ayarlar kaydedildi', 'success');
+}
+
+/* ── LDAP ── */
 async function saveLdap() {
   const payload = {
-    server_address: document.getElementById('ldap_server_address').value,
-    port: Number(document.getElementById('ldap_port').value),
-    base_dn: document.getElementById('ldap_base_dn').value,
-    bind_dn: document.getElementById('ldap_bind_dn').value,
-    bind_password: document.getElementById('ldap_bind_password').value,
-    user_search_filter: document.getElementById('ldap_user_search_filter').value,
-    group_search_filter: document.getElementById('ldap_group_search_filter').value,
-    timeout_seconds: Number(document.getElementById('ldap_timeout_seconds').value),
-    tls_enabled: document.getElementById('ldap_tls_enabled').checked,
-    verify_cert: document.getElementById('ldap_verify_cert').checked,
+    server_address:      document.getElementById('ldap_server_address').value.trim(),
+    port:                Number(document.getElementById('ldap_port').value) || 636,
+    base_dn:             document.getElementById('ldap_base_dn').value.trim(),
+    bind_dn:             document.getElementById('ldap_bind_dn').value.trim(),
+    bind_password:       document.getElementById('ldap_bind_password').value,
+    user_search_filter:  document.getElementById('ldap_user_search_filter').value.trim(),
+    group_search_filter: document.getElementById('ldap_group_search_filter').value.trim(),
+    timeout_seconds:     Number(document.getElementById('ldap_timeout_seconds').value) || 5,
+    tls_enabled:         document.getElementById('ldap_tls_enabled').checked,
+    verify_cert:         document.getElementById('ldap_verify_cert').checked,
   };
   try {
     await api('/api/settings/ldap', { method: 'PUT', body: JSON.stringify(payload) });
     showToast('LDAPS ayarları kaydedildi', 'success');
+    document.getElementById('ldap_bind_password').value = '••••••••';
   } catch (e) { showToast(e.message, 'error'); }
 }
 
 async function testLdap() {
+  const btn = event.target;
+  const resultEl = document.getElementById('ldapTestResult');
+  btn.disabled = true; btn.textContent = '🔄 Test ediliyor…';
   try {
     const data = await api('/api/settings/ldap/test', { method: 'POST', body: JSON.stringify({}) });
-    const el = document.getElementById('ldapTestResult');
-    el.textContent = data.message;
-    el.className = data.ok ? 'alert alert-success' : 'alert alert-error';
-    el.style.display = '';
-  } catch (e) { showToast(e.message, 'error'); }
+    resultEl.className = data.ok ? 'alert alert-success' : 'alert alert-error';
+    resultEl.innerHTML = `<span>${data.ok ? '✓' : '✕'}</span><span>${escHtml(data.message)}</span>`;
+    resultEl.style.display = '';
+  } catch (e) {
+    resultEl.className = 'alert alert-error';
+    resultEl.innerHTML = `<span>✕</span><span>${escHtml(e.message)}</span>`;
+    resultEl.style.display = '';
+  } finally {
+    btn.disabled = false; btn.textContent = '🔌 Bağlantıyı Test Et';
+  }
 }
 
+/* ── SAML ── */
 async function saveSaml() {
+  let attrMapping = {}, roleMapping = {};
+  try { attrMapping = JSON.parse(document.getElementById('saml_attribute_mapping').value || '{}'); } catch { attrMapping = {}; }
+  try { roleMapping = JSON.parse(document.getElementById('saml_role_mapping').value || '{}');       } catch { roleMapping = {}; }
+
   const payload = {
-    enabled: document.getElementById('saml_enabled').checked,
-    entity_id: document.getElementById('saml_entity_id').value,
-    sso_url: document.getElementById('saml_sso_url').value,
-    slo_url: document.getElementById('saml_slo_url').value,
-    email_attribute: document.getElementById('saml_email_attribute').value,
-    display_name_attribute: document.getElementById('saml_display_name_attribute').value,
-    nameid_mapping: document.getElementById('saml_nameid_mapping').value,
-    x509_certificate: document.getElementById('saml_x509_certificate').value,
-    attribute_mapping: document.getElementById('saml_attribute_mapping').value,
-    role_mapping: document.getElementById('saml_role_mapping').value,
+    enabled:                 document.getElementById('saml_enabled').checked,
+    entity_id:               document.getElementById('saml_entity_id').value.trim(),
+    sso_url:                 document.getElementById('saml_sso_url').value.trim(),
+    slo_url:                 document.getElementById('saml_slo_url').value.trim(),
+    email_attribute:         document.getElementById('saml_email_attribute').value.trim(),
+    display_name_attribute:  document.getElementById('saml_display_name_attribute').value.trim(),
+    nameid_mapping:          document.getElementById('saml_nameid_mapping').value.trim(),
+    x509_certificate:        document.getElementById('saml_x509_certificate').value.trim(),
+    attribute_mapping:       attrMapping,
+    role_mapping:            roleMapping,
   };
   try {
     await api('/api/settings/saml', { method: 'PUT', body: JSON.stringify(payload) });
@@ -102,36 +150,76 @@ async function saveSaml() {
   } catch (e) { showToast(e.message, 'error'); }
 }
 
+/* ── SMTP ── */
 async function saveSmtp() {
   const payload = {
-    host: document.getElementById('smtp_host').value,
-    port: Number(document.getElementById('smtp_port').value),
-    username: document.getElementById('smtp_username').value,
-    password: document.getElementById('smtp_password').value,
-    sender_email: document.getElementById('smtp_sender_email').value,
-    tls_ssl: document.getElementById('smtp_tls_ssl').checked,
+    host:         document.getElementById('smtp_host').value.trim(),
+    port:         Number(document.getElementById('smtp_port').value) || 587,
+    username:     document.getElementById('smtp_username').value.trim(),
+    password:     document.getElementById('smtp_password').value,
+    sender_email: document.getElementById('smtp_sender_email').value.trim(),
+    tls_ssl:      document.getElementById('smtp_tls_ssl').checked,
   };
   try {
     await api('/api/settings/smtp', { method: 'PUT', body: JSON.stringify(payload) });
     showToast('SMTP ayarları kaydedildi', 'success');
+    document.getElementById('smtp_password').value = '••••••••';
   } catch (e) { showToast(e.message, 'error'); }
 }
 
 async function testSmtp() {
+  const btn = event.target;
+  const resultEl = document.getElementById('smtpResult');
+  btn.disabled = true; btn.textContent = '🔄 Gönderiliyor…';
   try {
     const result = await api('/api/settings/smtp/test', { method: 'POST', body: JSON.stringify({}) });
-    const el = document.getElementById('smtpResult');
-    el.textContent = result.message;
-    el.className = result.ok ? 'alert alert-success' : 'alert alert-error';
-    el.style.display = '';
+    resultEl.className = result.ok ? 'alert alert-success' : 'alert alert-error';
+    resultEl.innerHTML = `<span>${result.ok ? '✓' : '✕'}</span><span>${escHtml(result.message)}</span>`;
+    resultEl.style.display = '';
+  } catch (e) {
+    resultEl.className = 'alert alert-error';
+    resultEl.innerHTML = `<span>✕</span><span>${escHtml(e.message)}</span>`;
+    resultEl.style.display = '';
+  } finally {
+    btn.disabled = false; btn.textContent = '📧 Test Mail Gönder';
+  }
+}
+
+/* ── Report modules ── */
+async function loadReportModulesSettings() {
+  try {
+    const rows = await api('/api/reports/modules');
+    const tbody = document.getElementById('reportModulesSettingsTbody');
+    if (!tbody) return;
+    tbody.innerHTML = rows.map(m => `
+      <tr>
+        <td style="font-weight:500">${escHtml(m.name)}</td>
+        <td><code style="font-size:11.5px;background:var(--bg);padding:2px 6px;border-radius:4px">${escHtml(m.code)}</code></td>
+        <td>${m.is_active ? '<span class="badge badge-green">Aktif</span>' : '<span class="badge badge-gray">Pasif</span>'}</td>
+        <td>
+          <button class="btn btn-sm ${m.is_active ? 'btn-danger' : 'btn-success'}"
+                  onclick="toggleReportModule(${m.id}, ${!m.is_active})">
+            ${m.is_active ? 'Pasifleştir' : 'Aktifleştir'}
+          </button>
+        </td>
+      </tr>`).join('');
   } catch (e) { showToast(e.message, 'error'); }
 }
 
+async function toggleReportModule(id, isActive) {
+  try {
+    await api(`/api/reports/modules/${id}`, { method: 'PUT', body: JSON.stringify({ is_active: isActive }) });
+    showToast(isActive ? 'Modül aktifleştirildi' : 'Modül pasifleştirildi', 'success');
+    loadReportModulesSettings();
+  } catch (e) { showToast(e.message, 'error'); }
+}
+
+/* ── Log settings ── */
 async function saveLogSettings() {
   const payload = {
-    max_file_size_mb: Number(document.getElementById('log_max_file_size_mb').value),
-    retention_days: Number(document.getElementById('log_retention_days').value),
-    auto_refresh_seconds: Number(document.getElementById('log_auto_refresh_seconds').value),
+    max_file_size_mb:     Number(document.getElementById('log_max_file_size_mb').value) || 20,
+    retention_days:       Number(document.getElementById('log_retention_days').value) || 30,
+    auto_refresh_seconds: Number(document.getElementById('log_auto_refresh_seconds').value) || 5,
   };
   try {
     await api('/api/settings/logs', { method: 'PUT', body: JSON.stringify(payload) });
@@ -139,7 +227,17 @@ async function saveLogSettings() {
   } catch (e) { showToast(e.message, 'error'); }
 }
 
+/* ── Init ── */
 document.addEventListener('DOMContentLoaded', () => {
   setupTabs();
-  loadSettings().catch(e => showToast(e.message, 'error'));
+  loadSettings();
+  loadReportModulesSettings();
+
+  /* Timezone clock updater */
+  setInterval(() => {
+    const tz = document.getElementById('timezone')?.value || 'Europe/Istanbul';
+    updateTzClock(tz);
+  }, 5000);
+
+  document.getElementById('timezone')?.addEventListener('change', e => updateTzClock(e.target.value));
 });

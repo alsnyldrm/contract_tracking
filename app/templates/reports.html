@@ -1,14 +1,87 @@
 {% extends 'base.html' %}
+{% block title %}Raporlar — Contract Tracking{% endblock %}
 {% block page_title %}Raporlar{% endblock %}
+
 {% block content %}
-<div class="panel">
-  <h3>Rapor Modülleri</h3>
-  <table class="table" id="reportModuleTable"><thead><tr><th>Rapor</th><th>Durum</th><th>Aksiyon</th></tr></thead><tbody></tbody></table>
-</div>
-<div class="panel">
-  <h3>Rapor Sonuçları</h3>
-  <div class="toolbar"><select id="reportCode"></select><button class="btn btn-primary" onclick="runReport()">Çalıştır</button><button class="btn" onclick="exportReport('pdf')">PDF</button><button class="btn" onclick="exportReport('csv')">CSV</button><button class="btn" onclick="exportReport('xlsx')">Excel</button></div>
-  <table class="table" id="reportTable"><thead></thead><tbody></tbody></table>
+<div class="grid grid-2" style="align-items:flex-start">
+
+  <!-- Sol: Rapor listesi -->
+  <div class="panel" style="position:sticky;top:76px">
+    <div class="panel-header">
+      <h3>📊 Rapor Modülleri</h3>
+    </div>
+    <div id="reportModuleList">
+      <div style="text-align:center;padding:24px;color:var(--muted)"><div class="spinner"></div></div>
+    </div>
+  </div>
+
+  <!-- Sağ: Rapor çalıştırma ve sonuçlar -->
+  <div>
+    <div class="panel">
+      <div class="panel-header">
+        <h3 id="activeReportName">Rapor Seçiniz</h3>
+        <div style="display:flex;gap:6px" id="exportBtns" style="display:none">
+          <button class="btn btn-sm" onclick="exportReport('pdf')">📕 PDF</button>
+          <button class="btn btn-sm" onclick="exportReport('csv')">📄 CSV</button>
+          <button class="btn btn-sm" onclick="exportReport('xlsx')">📗 Excel</button>
+        </div>
+      </div>
+
+      <!-- Filtreler -->
+      <div class="report-filter-bar" id="reportFilters">
+        <div class="field">
+          <label>Başlangıç Tarihi</label>
+          <input type="date" id="rFilterDateFrom" class="input-sm" style="max-width:160px" />
+        </div>
+        <div class="field">
+          <label>Bitiş Tarihi</label>
+          <input type="date" id="rFilterDateTo" class="input-sm" style="max-width:160px" />
+        </div>
+        <div class="field">
+          <label>Kurum</label>
+          <select id="rFilterInstitution" class="select-sm" style="max-width:200px">
+            <option value="">Tüm Kurumlar</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Durum</label>
+          <select id="rFilterStatus" class="select-sm" style="max-width:160px">
+            <option value="">Tümü</option>
+            <option>Taslak</option><option>Aktif</option><option>Yaklaşıyor</option>
+            <option>Süresi Doldu</option><option>İptal</option><option>Yenilendi</option>
+          </select>
+        </div>
+        <div style="align-self:flex-end">
+          <button class="btn btn-primary" onclick="runReport()" id="runReportBtn">
+            ▶ Çalıştır
+          </button>
+        </div>
+      </div>
+
+      <!-- Rapor meta -->
+      <div id="reportMeta" style="display:none;margin-bottom:10px">
+        <span class="report-count" id="reportCount"></span>
+      </div>
+
+      <!-- Rapor tablosu -->
+      <div class="table-wrap" id="reportTableWrap" style="display:none">
+        <table class="table" id="reportTable">
+          <thead id="reportThead"></thead>
+          <tbody id="reportTbody"></tbody>
+        </table>
+      </div>
+
+      <!-- Başlangıç placeholder -->
+      <div id="reportPlaceholder">
+        <div class="empty-state">
+          <div class="empty-icon">📊</div>
+          <p style="font-weight:600">Sol taraftan bir rapor seçin</p>
+          <p>Filtrelerinizi ayarlayıp Çalıştır butonuna tıklayın</p>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 {% endblock %}
+
 {% block scripts %}<script src="/static/js/reports.js"></script>{% endblock %}

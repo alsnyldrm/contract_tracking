@@ -1,8 +1,81 @@
 {% extends 'base.html' %}
+{% block title %}Kullanıcılar — Contract Tracking{% endblock %}
 {% block page_title %}Kullanıcılar ve Roller{% endblock %}
+
 {% block content %}
 <div class="panel">
-  <table class="table" id="userTable"><thead><tr><th>Kullanıcı</th><th>Ad Soyad</th><th>Rol</th><th>Kaynak</th><th>İşlem</th></tr></thead><tbody></tbody></table>
+  <div class="panel-header">
+    <h3>Kullanıcı Listesi</h3>
+    <div style="display:flex;gap:8px;align-items:center">
+      <input class="input-sm" id="userSearch" placeholder="🔍 Kullanıcı ara..." style="max-width:220px" oninput="filterUsers()" />
+      <select class="select-sm" id="roleFilter" onchange="filterUsers()">
+        <option value="">Tüm Roller</option>
+        <option value="admin">Admin</option>
+        <option value="readonly">Read Only</option>
+      </select>
+      <select class="select-sm" id="sourceFilter" onchange="filterUsers()">
+        <option value="">Tüm Kaynaklar</option>
+        <option value="local">Yerel</option>
+        <option value="saml">SAML</option>
+        <option value="ldap">LDAP</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table class="table" id="userTable">
+      <thead>
+        <tr>
+          <th>Kullanıcı Adı</th>
+          <th>Ad Soyad</th>
+          <th>E-posta</th>
+          <th>Rol</th>
+          <th>Kimlik Kaynağı</th>
+          <th>Durum</th>
+          <th>Oluşturulma</th>
+          <th>İşlem</th>
+        </tr>
+      </thead>
+      <tbody id="userTbody">
+        <tr class="loading-row"><td colspan="8"><div class="spinner"></div></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div style="margin-top:14px">
+    <div class="alert alert-info">
+      <span>ℹ</span>
+      <span>
+        SAML/Microsoft Entra ID ile giriş yapan kullanıcılar otomatik olarak <strong>readonly</strong> rolüyle oluşturulur.
+        Burada rollerini değiştirebilirsiniz.
+      </span>
+    </div>
+  </div>
+</div>
+
+<!-- Rol değiştirme modal -->
+<div class="modal" id="roleModal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>Rol Değiştir</h3>
+      <button class="modal-close" onclick="document.getElementById('roleModal').classList.remove('open')">✕</button>
+    </div>
+    <div class="field" style="margin-bottom:0">
+      <label>Kullanıcı: <strong id="roleModalUser">—</strong></label>
+    </div>
+    <div class="field" style="margin-top:14px">
+      <label>Yeni Rol</label>
+      <select id="roleModalSelect">
+        <option value="readonly">Read Only (Salt Okunur)</option>
+        <option value="admin">Admin (Yönetici)</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="document.getElementById('roleModal').classList.remove('open')">İptal</button>
+      <button class="btn btn-primary" onclick="applyRoleChange()">Rolü Güncelle</button>
+    </div>
+  </div>
 </div>
 {% endblock %}
+
 {% block scripts %}<script src="/static/js/users.js"></script>{% endblock %}

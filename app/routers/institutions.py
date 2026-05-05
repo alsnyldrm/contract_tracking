@@ -5,6 +5,10 @@ from app.core.database import get_db
 from app.core.deps import enforce_csrf, get_current_user, require_admin
 from app.core.security import now_utc
 from app.models import Institution, InstitutionType, User
+
+def _inst_type_map(db) -> dict:
+    rows = db.query(InstitutionType).all()
+    return {r.id: r.name for r in rows}
 from app.services.audit_service import add_audit_log
 
 router = APIRouter()
@@ -26,6 +30,7 @@ def list_institutions(
         query = query.filter(Institution.is_active == is_active)
     total = query.count()
     items = query.order_by(Institution.updated_at.desc()).offset((page - 1) * page_size).limit(page_size).all()
+    type_map = _inst_type_map(db)
     return {
         'total': total,
         'items': [
@@ -35,6 +40,8 @@ def list_institutions(
                 'short_name': i.short_name,
                 'tax_no': i.tax_no,
                 'tax_office': i.tax_office,
+                'institution_type_id': i.institution_type_id,
+                'institution_type_name': type_map.get(i.institution_type_id),
                 'sector': i.sector,
                 'contact_person': i.contact_person,
                 'contact_email': i.contact_email,

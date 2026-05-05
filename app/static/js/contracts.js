@@ -380,11 +380,10 @@ async function uploadDocument() {
 
   const fd = new FormData();
   fd.append('file', fileInput.files[0]);
-  fd.append('contract_id', currentDocContractId);
 
   progress.style.display = '';
   try {
-    await api('/api/documents/upload', { method: 'POST', body: fd });
+    await api(`/api/documents/contract/${currentDocContractId}`, { method: 'POST', body: fd });
     showToast('Belge yüklendi', 'success');
     fileInput.value = '';
     await loadDocuments(currentDocContractId);
