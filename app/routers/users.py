@@ -5,7 +5,18 @@ from sqlalchemy.orm import Session, joinedload
 from app.core.database import get_db
 from app.core.deps import enforce_csrf, get_current_user, require_admin
 from app.core.security import hash_password, now_utc
-from app.models import Role, User
+from app.models import (
+    AuditLog,
+    Contract,
+    ContractDocument,
+    Notification,
+    NotificationGroup,
+    NotificationGroupMember,
+    Role,
+    User,
+    UserPreference,
+    UserSession,
+)
 from app.services.audit_service import add_audit_log
 from app.services.auth_service import create_local_user
 
@@ -205,17 +216,35 @@ def delete_user(user_id: int, request: Request, admin: User = Depends(require_ad
         raise HTTPException(status_code=404, detail='Kullanıcı bulunamadı')
     if target.id == admin.id:
         raise HTTPException(status_code=400, detail='Kendi hesabınızı silemezsiniz')
-    ts = now_utc()
-    target.is_deleted = True
-    target.deleted_at = ts
-    target.is_active = False
-    target.updated_at = ts
+
+    # Kritik iş kayıtlarında referans varsa kullanıcıyı fiziksel silmeyiz.
+    blocking_refs = {
+        'contracts_created': db.query(Contract).filter(Contract.created_by_user_id == target.id).count(),
+        'contracts_updated': db.query(Contract).filter(Contract.updated_by_user_id == target.id).count(),
+        'documents_uploaded': db.query(ContractDocument).filter(ContractDocument.uploaded_by_user_id == target.id).count(),
+        'notification_groups_created': db.query(NotificationGroup).filter(NotificationGroup.created_by_user_id == target.id).count(),
+        'notification_groups_updated': db.query(NotificationGroup).filter(NotificationGroup.updated_by_user_id == target.id).count(),
+    }
+    if any(blocking_refs.values()):
+        raise HTTPException(
+            status_code=409,
+            detail='Kullanıcı kritik kayıtlarda referanslı olduğu için silinemedi. Önce sahip olduğu kayıtları başka kullanıcıya aktarın.',
+        )
+
+    # Eski oturum/tercih izleri kalmaması için ilişkili kayıtları temizle.
+    db.query(UserSession).filter(UserSession.user_id == target.id).delete()
+    db.query(UserPreference).filter(UserPreference.user_id == target.id).delete()
+    db.query(Notification).filter(Notification.user_id == target.id).delete()
+    db.query(NotificationGroupMember).filter(NotificationGroupMember.user_id == target.id).delete()
+    db.query(AuditLog).filter(AuditLog.user_id == target.id).update({'user_id': None}, synchronize_session=False)
+    db.delete(target)
     db.commit()
+
     add_audit_log(
         db,
         table_name='users',
-        record_id=str(target.id),
-        action='soft_delete',
+        record_id=str(user_id),
+        action='hard_delete',
         user=admin,
         ip_address=request.client.host if request.client else None,
         request_id=getattr(request.state, 'request_id', None),
