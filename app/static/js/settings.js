@@ -60,9 +60,6 @@ async function loadSettings() {
   set('saml_x509_certificate',       data.saml.x509_certificate || '');
   set('saml_attribute_mapping',      JSON.stringify(data.saml.attribute_mapping || {}, null, 2));
   set('saml_role_mapping',           JSON.stringify(data.saml.role_mapping || {}, null, 2));
-  chk('saml_requested_authn_context', data.saml.requested_authn_context);
-  set('saml_requested_authn_context_comparison', data.saml.requested_authn_context_comparison || 'exact');
-  updateSamlRequestedAuthnContextUI();
   await fillSamlBootstrap(true);
 
   /* SMTP */
@@ -209,13 +206,6 @@ async function fillSamlBootstrap(silent = false) {
     setIfEmptyOrLegacy('saml_email_attribute', recommended.email_attribute, ['email', 'mail', 'emailaddress']);
     setIfEmptyOrLegacy('saml_display_name_attribute', recommended.display_name_attribute, ['displayName', 'name']);
     setIfEmptyOrLegacy('saml_nameid_mapping', recommended.nameid_mapping, []);
-    setIfEmptyOrLegacy(
-      'saml_requested_authn_context_comparison',
-      recommended.requested_authn_context_comparison || 'exact',
-      []
-    );
-    updateSamlRequestedAuthnContextUI();
-
     const hint = document.getElementById('samlExportHint');
     if (hint && sp.base_url) {
       hint.innerHTML = `SP bilgileri otomatik üretildi: <code>${escHtml(sp.base_url)}</code> (Metadata/ACS/SLO).`;
@@ -243,15 +233,6 @@ async function downloadSamlMetadata() {
     showToast('metadata.xml indirildi', 'success');
   } catch (e) {
     showToast('Metadata export başarısız: ' + e.message, 'error');
-  }
-}
-
-function updateSamlRequestedAuthnContextUI() {
-  const enabled = !!document.getElementById('saml_requested_authn_context')?.checked;
-  const cmp = document.getElementById('saml_requested_authn_context_comparison');
-  if (cmp) {
-    cmp.disabled = !enabled;
-    cmp.style.opacity = enabled ? '' : '0.6';
   }
 }
 
@@ -300,8 +281,6 @@ async function saveSaml() {
     x509_certificate:        document.getElementById('saml_x509_certificate').value.trim(),
     attribute_mapping:       attrMapping,
     role_mapping:            roleMapping,
-    requested_authn_context: document.getElementById('saml_requested_authn_context').checked,
-    requested_authn_context_comparison: document.getElementById('saml_requested_authn_context_comparison').value.trim() || 'exact',
   };
   try {
     await api('/api/settings/saml', { method: 'PUT', body: JSON.stringify(payload) });
@@ -434,11 +413,6 @@ document.addEventListener('DOMContentLoaded', () => {
   loadReportModulesSettings();
 
   document.getElementById('smtp_relay_mode')?.addEventListener('change', updateSmtpRelayModeUI);
-  document.getElementById('saml_requested_authn_context')?.addEventListener('change', e => {
-    e.target.dataset.userSet = '1';
-    updateSamlRequestedAuthnContextUI();
-  });
-
   /* Timezone clock updater */
   setInterval(() => {
     const tz = document.getElementById('timezone')?.value || 'Europe/Istanbul';

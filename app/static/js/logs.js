@@ -1,4 +1,6 @@
 let autoTimer = null;
+let currentRows = [];
+const LOG_TYPE_LABELS = { all: 'hepsi' };
 const LEVEL_BADGE = {
   DEBUG:    '<span class="badge badge-gray">DEBUG</span>',
   INFO:     '<span class="badge badge-blue">INFO</span>',
@@ -11,7 +13,7 @@ async function loadTypes() {
   try {
     const types = await api('/api/logs/types');
     const sel = document.getElementById('logType');
-    sel.innerHTML = types.map(t => `<option value="${escHtml(t)}">${escHtml(t)}</option>`).join('');
+    sel.innerHTML = types.map(t => `<option value="${escHtml(t)}">${escHtml(LOG_TYPE_LABELS[t] || t)}</option>`).join('');
   } catch { /* sessiz */ }
 }
 
@@ -31,6 +33,7 @@ async function loadLogs() {
     );
 
     const rows = data.rows || [];
+    currentRows = rows;
     statusEl.textContent = `${rows.length} kayıt gösteriliyor (son güncelleme: ${new Date().toLocaleTimeString('tr-TR')})`;
 
     if (rows.length === 0) {
@@ -38,7 +41,7 @@ async function loadLogs() {
       return;
     }
 
-    tbody.innerHTML = rows.map(r => {
+    tbody.innerHTML = rows.map((r, idx) => {
       const lvl    = (r.level || '').toUpperCase();
       const rowCls = `log-row-${lvl}`;
       const badge  = LEVEL_BADGE[lvl] || `<span class="badge badge-gray">${escHtml(r.level || '?')}</span>`;
@@ -47,18 +50,19 @@ async function loadLogs() {
         <td>${badge}</td>
         <td class="td-muted" style="font-size:12px">${escHtml(r.module || r.name || '')}</td>
         <td style="font-size:12.5px">${escHtml(r.message || '')}</td>
-        <td><button class="btn btn-xs" onclick='showLogDetail(${JSON.stringify(JSON.stringify(r))})'>Detay</button></td>
+        <td><button class="btn btn-xs log-detail-btn" data-row-index="${idx}">Detay</button></td>
       </tr>`;
     }).join('');
   } catch (e) {
+    currentRows = [];
     statusEl.textContent = 'Hata: ' + e.message;
     tbody.innerHTML = `<tr><td colspan="5" class="td-muted" style="text-align:center;padding:24px">${escHtml(e.message)}</td></tr>`;
   }
 }
 
-function showLogDetail(raw) {
-  let row;
-  try { row = JSON.parse(raw); } catch { row = { raw }; }
+function showLogDetailByIndex(idx) {
+  const row = currentRows[idx];
+  if (!row) return;
   const el = document.getElementById('logDetailContent');
   if (el) {
     el.textContent = JSON.stringify(row, null, 2);
@@ -87,6 +91,13 @@ function toggleAutoRefresh() {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+  document.getElementById('logTbody')?.addEventListener('click', e => {
+    const btn = e.target.closest('.log-detail-btn');
+    if (!btn) return;
+    const idx = Number(btn.dataset.rowIndex);
+    if (Number.isNaN(idx)) return;
+    showLogDetailByIndex(idx);
+  });
   await loadTypes();
   await loadLogs();
 });

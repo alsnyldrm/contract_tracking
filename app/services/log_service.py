@@ -4,6 +4,7 @@ import csv
 import io
 import json
 from collections import deque
+from datetime import datetime
 from pathlib import Path
 
 from app.core.config import get_settings
@@ -36,6 +37,33 @@ def tail_json_logs(path: Path, limit: int = 1000) -> list[dict]:
         except Exception:
             data.append({'raw': line})
     return data
+
+
+def tail_all_json_logs(limit: int = 1000) -> list[dict]:
+    merged: list[dict] = []
+    per_file_limit = max(100, min(limit, 500))
+    for category in LOG_FILES:
+        path = resolve_log_file(category)
+        rows = tail_json_logs(path, limit=per_file_limit)
+        for row in rows:
+            if 'module' not in row:
+                row['module'] = category
+            row['_log_type'] = category
+            merged.append(row)
+
+    def sort_key(item: dict) -> datetime:
+        raw = str(item.get('timestamp') or '')
+        if not raw:
+            return datetime.min
+        try:
+            if raw.endswith('Z'):
+                raw = raw[:-1] + '+00:00'
+            return datetime.fromisoformat(raw)
+        except Exception:
+            return datetime.min
+
+    merged.sort(key=sort_key, reverse=True)
+    return merged[:limit]
 
 
 def filter_logs(entries: list[dict], filters: dict) -> list[dict]:

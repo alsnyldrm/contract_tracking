@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.core.logging_config import log_event
 from app.core.security import now_utc
-from app.models import AppSetting, Role, SamlSetting, User
+from app.models import Role, SamlSetting, User
 
 
 DEFAULT_EMAIL_ATTRIBUTES = (
@@ -34,11 +34,6 @@ DEFAULT_DISPLAY_NAME_ATTRIBUTES = (
 EMAIL_PATTERN = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
 SAML_ACS_BINDING = 'urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST'
 SAML_SLO_BINDING = 'urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect'
-SAML_REQUESTED_AUTHN_CONTEXT_KEY = 'saml.requested_authn_context'
-SAML_REQUESTED_AUTHN_CONTEXT_COMPARISON_KEY = 'saml.requested_authn_context_comparison'
-DEFAULT_REQUESTED_AUTHN_CONTEXT = False
-DEFAULT_REQUESTED_AUTHN_CONTEXT_COMPARISON = 'exact'
-ALLOWED_AUTHN_CONTEXT_COMPARISONS = {'exact', 'minimum', 'maximum', 'better'}
 
 
 def get_sp_runtime_config(request: Request) -> dict:
@@ -57,27 +52,6 @@ def get_sp_runtime_config(request: Request) -> dict:
 def get_saml_setting(db: Session) -> SamlSetting | None:
     return db.query(SamlSetting).first()
 
-
-def get_saml_security_preferences(db: Session) -> dict:
-    rows = db.query(AppSetting).filter(
-        AppSetting.key.in_([SAML_REQUESTED_AUTHN_CONTEXT_KEY, SAML_REQUESTED_AUTHN_CONTEXT_COMPARISON_KEY])
-    ).all()
-    row_map = {row.key: row.value for row in rows}
-    requested_authn_context_raw = str(row_map.get(SAML_REQUESTED_AUTHN_CONTEXT_KEY, '')).strip().lower()
-    requested_authn_context = requested_authn_context_raw in {'1', 'true', 'yes', 'on'}
-
-    comparison = str(
-        row_map.get(SAML_REQUESTED_AUTHN_CONTEXT_COMPARISON_KEY, DEFAULT_REQUESTED_AUTHN_CONTEXT_COMPARISON)
-    ).strip().lower()
-    if comparison not in ALLOWED_AUTHN_CONTEXT_COMPARISONS:
-        comparison = DEFAULT_REQUESTED_AUTHN_CONTEXT_COMPARISON
-
-    return {
-        'requested_authn_context': requested_authn_context,
-        'requested_authn_context_comparison': comparison,
-    }
-
-
 def _prepare_request(request: Request) -> dict:
     url_data = urlparse(str(request.url))
     return {
@@ -90,20 +64,15 @@ def _prepare_request(request: Request) -> dict:
     }
 
 
-def _build_settings(setting: SamlSetting, request: Request, security_prefs: dict | None = None) -> dict:
+def _build_settings(setting: SamlSetting, request: Request) -> dict:
     sp = get_sp_runtime_config(request)
-    prefs = security_prefs or {
-        'requested_authn_context': DEFAULT_REQUESTED_AUTHN_CONTEXT,
-        'requested_authn_context_comparison': DEFAULT_REQUESTED_AUTHN_CONTEXT_COMPARISON,
-    }
     return {
         'strict': False,
         'debug': False,
         'security': {
-            'requestedAuthnContext': bool(prefs.get('requested_authn_context', DEFAULT_REQUESTED_AUTHN_CONTEXT)),
-            'requestedAuthnContextComparison': str(
-                prefs.get('requested_authn_context_comparison', DEFAULT_REQUESTED_AUTHN_CONTEXT_COMPARISON)
-            ).lower(),
+            # AuthnRequest içinde RequestedAuthnContext göndermeyerek
+            # Entra'nın şifre/MFA/x509 gibi farklı yöntemlerle gelen oturumlarını kabul ederiz.
+            'requestedAuthnContext': False,
         },
         'sp': {
             'entityId': sp['entity_id'],
@@ -129,8 +98,7 @@ def _build_settings(setting: SamlSetting, request: Request, security_prefs: dict
 
 def create_saml_auth(db: Session, request: Request, setting: SamlSetting) -> OneLogin_Saml2_Auth:
     req_data = _prepare_request(request)
-    security_prefs = get_saml_security_preferences(db)
-    return OneLogin_Saml2_Auth(req_data, _build_settings(setting, request, security_prefs))
+    return OneLogin_Saml2_Auth(req_data, _build_settings(setting, request))
 
 
 def start_saml_login(db: Session, request: Request) -> str:
@@ -208,8 +176,7 @@ def process_acs(db: Session, request: Request, post_data: dict) -> User:
 
     req_data = _prepare_request(request)
     req_data['post_data'] = post_data
-    security_prefs = get_saml_security_preferences(db)
-    auth = OneLogin_Saml2_Auth(req_data, _build_settings(setting, request, security_prefs))
+    auth = OneLogin_Saml2_Auth(req_data, _build_settings(setting, request))
     auth.process_response()
     errors = auth.get_errors()
     if errors:

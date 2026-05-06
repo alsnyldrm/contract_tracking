@@ -234,25 +234,6 @@
           <textarea id="saml_x509_certificate" placeholder="-----BEGIN CERTIFICATE-----&#10;MIICpDCCAYwCCQD...&#10;-----END CERTIFICATE-----" style="min-height:100px;font-family:monospace;font-size:12px"></textarea>
           <div class="form-hint">Boş bırakılırsa mevcut sertifika korunur</div>
         </div>
-        <div class="field col-span-2">
-          <label>RequestedAuthnContext Gönder</label>
-          <label class="checkbox-label">
-            <input type="checkbox" id="saml_requested_authn_context" />
-            AuthnRequest içinde RequestedAuthnContext gönder
-          </label>
-          <div class="form-hint">
-            AADSTS75011 hatası için önerilen: bu alanı kapalı bırak (RequestedAuthnContext gönderme).
-          </div>
-        </div>
-        <div class="field col-span-2">
-          <label>RequestedAuthnContext Comparison</label>
-          <select id="saml_requested_authn_context_comparison" style="max-width:260px">
-            <option value="exact">exact</option>
-            <option value="minimum">minimum</option>
-            <option value="better">better</option>
-            <option value="maximum">maximum</option>
-          </select>
-        </div>
       </div>
 
       <h4 class="saml-step-title">3) Claim ve Eşleme Ayarları</h4>

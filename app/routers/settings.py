@@ -21,13 +21,7 @@ from app.services.ldap_service import test_ldap_connection
 from app.services.saml_service import (
     DEFAULT_DISPLAY_NAME_ATTRIBUTES,
     DEFAULT_EMAIL_ATTRIBUTES,
-    ALLOWED_AUTHN_CONTEXT_COMPARISONS,
-    DEFAULT_REQUESTED_AUTHN_CONTEXT,
-    DEFAULT_REQUESTED_AUTHN_CONTEXT_COMPARISON,
-    SAML_REQUESTED_AUTHN_CONTEXT_COMPARISON_KEY,
-    SAML_REQUESTED_AUTHN_CONTEXT_KEY,
     get_sp_runtime_config,
-    get_saml_security_preferences,
     serialize_attribute_mapping,
 )
 
@@ -50,16 +44,6 @@ def _smtp_auth_mode(row: SmtpSetting | None) -> str:
     return 'auth' if (row.username and row.password) else 'relay'
 
 
-def _set_app_setting(db: Session, key: str, value: str) -> None:
-    row = db.query(AppSetting).filter(AppSetting.key == key).first()
-    if not row:
-        row = AppSetting(key=key, value=value, created_at=now_utc(), updated_at=now_utc())
-        db.add(row)
-    else:
-        row.value = value
-        row.updated_at = now_utc()
-
-
 def _normalize_pem_certificate(cert_text: str) -> str:
     cleaned = ''.join(str(cert_text or '').strip().replace('\r', '').replace('\n', '').split())
     if not cleaned:
@@ -79,7 +63,6 @@ def get_settings_bundle(_: User = Depends(require_admin), db: Session = Depends(
     smtp = db.query(SmtpSetting).first()
     logs = db.query(LogSetting).first()
     timezone = db.query(AppSetting).filter(AppSetting.key == 'system.timezone').first()
-    saml_security = get_saml_security_preferences(db)
 
     return {
         'timezone': timezone.value if timezone else 'Europe/Istanbul',
@@ -106,11 +89,6 @@ def get_settings_bundle(_: User = Depends(require_admin), db: Session = Depends(
             'email_attribute': saml.email_attribute if saml and saml.email_attribute else DEFAULT_ENTRA_EMAIL_ATTRIBUTE,
             'display_name_attribute': saml.display_name_attribute if saml and saml.display_name_attribute else DEFAULT_ENTRA_DISPLAY_ATTRIBUTE,
             'role_mapping': saml.role_mapping if saml else {},
-            'requested_authn_context': saml_security.get('requested_authn_context', DEFAULT_REQUESTED_AUTHN_CONTEXT),
-            'requested_authn_context_comparison': saml_security.get(
-                'requested_authn_context_comparison',
-                DEFAULT_REQUESTED_AUTHN_CONTEXT_COMPARISON,
-            ),
         },
         'smtp': {
             'host': smtp.host if smtp else '',
@@ -140,8 +118,6 @@ def saml_bootstrap_info(request: Request, _: User = Depends(require_admin)):
             'email_attribute': DEFAULT_ENTRA_EMAIL_ATTRIBUTE,
             'display_name_attribute': DEFAULT_ENTRA_DISPLAY_ATTRIBUTE,
             'nameid_mapping': DEFAULT_NAMEID_FORMAT,
-            'requested_authn_context': DEFAULT_REQUESTED_AUTHN_CONTEXT,
-            'requested_authn_context_comparison': DEFAULT_REQUESTED_AUTHN_CONTEXT_COMPARISON,
             'fallback_email_attributes': list(DEFAULT_EMAIL_ATTRIBUTES),
             'fallback_display_attributes': list(DEFAULT_DISPLAY_NAME_ATTRIBUTES),
         },
@@ -300,15 +276,6 @@ def update_saml(payload: dict, request: Request, admin: User = Depends(require_a
         except Exception:
             role_mapping = {}
     row.role_mapping = role_mapping or {}
-
-    requested_authn_context = bool(payload.get('requested_authn_context', DEFAULT_REQUESTED_AUTHN_CONTEXT))
-    requested_authn_context_comparison = str(
-        payload.get('requested_authn_context_comparison', DEFAULT_REQUESTED_AUTHN_CONTEXT_COMPARISON)
-    ).strip().lower()
-    if requested_authn_context_comparison not in ALLOWED_AUTHN_CONTEXT_COMPARISONS:
-        requested_authn_context_comparison = DEFAULT_REQUESTED_AUTHN_CONTEXT_COMPARISON
-    _set_app_setting(db, SAML_REQUESTED_AUTHN_CONTEXT_KEY, 'true' if requested_authn_context else 'false')
-    _set_app_setting(db, SAML_REQUESTED_AUTHN_CONTEXT_COMPARISON_KEY, requested_authn_context_comparison)
 
     row.updated_at = now_utc()
     db.commit()
