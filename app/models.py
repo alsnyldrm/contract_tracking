@@ -126,6 +126,25 @@ class Currency(Base, TimestampMixin):
     symbol: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
 
 
+class NotificationGroup(Base, TimestampMixin):
+    __tablename__ = 'notification_groups'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(120), unique=True, nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_by_user_id: Mapped[int] = mapped_column(ForeignKey('users.id'), nullable=False)
+    updated_by_user_id: Mapped[int] = mapped_column(ForeignKey('users.id'), nullable=False)
+
+
+class NotificationGroupMember(Base):
+    __tablename__ = 'notification_group_members'
+
+    group_id: Mapped[int] = mapped_column(ForeignKey('notification_groups.id'), primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey('users.id'), primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
 class Contract(Base, TimestampMixin, SoftDeleteMixin):
     __tablename__ = 'contracts'
     __table_args__ = (UniqueConstraint('contract_number', name='uq_contract_number'),)
@@ -143,6 +162,7 @@ class Contract(Base, TimestampMixin, SoftDeleteMixin):
     currency_id: Mapped[Optional[int]] = mapped_column(ForeignKey('currencies.id'), nullable=True)
     vat_included: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     payment_period: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    notification_group_id: Mapped[Optional[int]] = mapped_column(ForeignKey('notification_groups.id'), nullable=True)
     responsible_person_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     responsible_person_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     responsible_person_username: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)

@@ -23,6 +23,7 @@ const CONTRACT_COLUMNS = [
   { key: 'currency', label: 'Para Birimi', defaultVisible: false },
   { key: 'vat_included', label: 'KDV Dahil', defaultVisible: false },
   { key: 'payment_period', label: 'Ödeme Periyodu', defaultVisible: false },
+  { key: 'notification_group', label: 'Bildirim Grubu', defaultVisible: false },
   { key: 'status', label: 'Durum', defaultVisible: true },
   { key: 'critical_level', label: 'Kritik Seviye', defaultVisible: true },
   { key: 'reminder_days', label: 'Hatırlatma (Gün)', defaultVisible: false },
@@ -255,6 +256,7 @@ async function loadContracts() {
       <td class="td-nowrap">${escHtml(c.currency_symbol || '—')}</td>
       <td class="col-center">${c.vat_included ? 'Evet' : 'Hayır'}</td>
       <td>${escHtml(c.payment_period || '—')}</td>
+      <td class="td-truncate" style="max-width:180px" title="${escHtml(c.notification_group_name || '')}">${escHtml(c.notification_group_name || '—')}</td>
       <td class="col-center">${statusBadge(c.status)}</td>
       <td class="col-center">${criticalBadge(c.critical_level)}</td>
       <td class="col-center">${c.reminder_days ?? '—'}</td>
@@ -346,6 +348,7 @@ function clearContractForm() {
     'c_description','c_internal_notes','c_tags'];
   ids.forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
   const selects = ['c_institution_id','c_contract_type_id','c_currency_id','c_payment_period'];
+  selects.push('c_notification_group_id');
   selects.forEach(id => { const el = document.getElementById(id); if (el) el.selectedIndex = 0; });
   document.getElementById('c_status').value       = 'Taslak';
   document.getElementById('c_critical_level').value = 'Düşük';
@@ -370,6 +373,7 @@ function fillContractForm(c) {
   set('c_payment_period',           c.payment_period || '');
   set('c_status',                   c.status);
   set('c_critical_level',           c.critical_level);
+  set('c_notification_group_id',    c.notification_group_id || '');
   set('c_reminder_days',            c.reminder_days);
   set('c_termination_notice_days',  c.termination_notice_days || '');
   set('c_responsible_person_name',  c.responsible_person_name || '');
@@ -402,6 +406,7 @@ async function saveContract() {
     currency_id:              Number(document.getElementById('c_currency_id').value) || null,
     vat_included:             document.getElementById('c_vat_included').checked,
     payment_period:           document.getElementById('c_payment_period').value || null,
+    notification_group_id:    Number(document.getElementById('c_notification_group_id').value) || null,
     status:                   document.getElementById('c_status').value,
     critical_level:           document.getElementById('c_critical_level').value,
     reminder_days:            Number(document.getElementById('c_reminder_days').value) || 30,
@@ -570,10 +575,11 @@ async function deleteDocument(docId) {
 /* ── Init ── */
 async function loadDropdowns() {
   try {
-    const [institutions, types, currencies] = await Promise.all([
+    const [institutions, types, currencies, notificationGroups] = await Promise.all([
       api('/api/institutions?page_size=500'),
       api('/api/contracts/types'),
       api('/api/contracts/currencies'),
+      api('/api/notification-groups/options'),
     ]);
 
     const instFilter = document.getElementById('institutionFilter');
@@ -591,6 +597,14 @@ async function loadDropdowns() {
     const currSelect = document.getElementById('c_currency_id');
     currSelect.innerHTML = '<option value="">Para birimi seçiniz</option>' +
       currencies.map(c => `<option value="${c.id}">${escHtml(c.code)} — ${escHtml(c.name)}</option>`).join('');
+
+    const ngSelect = document.getElementById('c_notification_group_id');
+    ngSelect.innerHTML = '<option value="">Bildirim grubu seçiniz</option>' +
+      notificationGroups.map(g => {
+        const passive = g.is_active ? '' : ' (Pasif)';
+        const memberInfo = ` (${g.member_count || 0} kullanıcı)`;
+        return `<option value="${g.id}">${escHtml(g.name)}${passive}${memberInfo}</option>`;
+      }).join('');
   } catch (e) {
     showToast('Dropdown verileri yüklenemedi: ' + e.message, 'error');
   }

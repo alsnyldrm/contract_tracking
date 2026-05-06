@@ -66,6 +66,7 @@
           <th>Para Birimi</th>
           <th class="col-center">KDV Dahil</th>
           <th>Ödeme Periyodu</th>
+          <th>Bildirim Grubu</th>
           <th class="sortable col-center" onclick="sortBy('status')">Durum <span class="sort-icon"></span></th>
           <th class="sortable col-center" onclick="sortBy('critical_level')">Kritik <span class="sort-icon"></span></th>
           <th class="col-center">Hatırlatma</th>
@@ -82,7 +83,7 @@
         </tr>
       </thead>
       <tbody id="contractTbody">
-        <tr class="loading-row"><td colspan="25"><div class="spinner"></div></td></tr>
+        <tr class="loading-row"><td colspan="26"><div class="spinner"></div></td></tr>
       </tbody>
     </table>
   </div>
@@ -204,6 +205,12 @@
         <label>Kritik Seviye</label>
         <select id="c_critical_level">
           <option>Düşük</option><option>Orta</option><option>Yüksek</option><option>Kritik</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Bildirim Grubu</label>
+        <select id="c_notification_group_id">
+          <option value="">Bildirim grubu seçiniz</option>
         </select>
       </div>
       <div class="field">

@@ -8,7 +8,7 @@ from fastapi.templating import Jinja2Templates
 
 from app.core.logging_config import bootstrap_startup_logs, log_event
 from app.core.middleware import RequestContextMiddleware
-from app.routers import auth, contracts, dashboard, documents, institutions, logs, pages, profile, reports, settings, users
+from app.routers import auth, contracts, dashboard, documents, institutions, logs, notification_groups, pages, profile, reports, settings, users
 from app.services.scheduler_service import start_scheduler, stop_scheduler
 
 app = FastAPI(title='Contract Tracking', docs_url='/api/docs', redoc_url=None)
@@ -28,6 +28,7 @@ app.include_router(contracts.router, prefix='/api/contracts', tags=['contracts']
 app.include_router(documents.router, prefix='/api/documents', tags=['documents'])
 app.include_router(reports.router, prefix='/api/reports', tags=['reports'])
 app.include_router(users.router, prefix='/api/users', tags=['users'])
+app.include_router(notification_groups.router, prefix='/api/notification-groups', tags=['notification-groups'])
 app.include_router(settings.router, prefix='/api/settings', tags=['settings'])
 app.include_router(logs.router, prefix='/api/logs', tags=['logs'])
 app.include_router(profile.router, prefix='/api/profile', tags=['profile'])

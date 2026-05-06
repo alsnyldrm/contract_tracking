@@ -1,0 +1,80 @@
+{% extends 'base.html' %}
+{% block title %}Bildirim Grupları — Contract Tracking{% endblock %}
+{% block page_title %}Bildirim Grupları{% endblock %}
+
+{% block content %}
+<div class="panel">
+  <div class="toolbar">
+    <input class="input-sm" id="ngSearch" placeholder="🔍 Grup adı veya kullanıcı ara..." style="max-width:300px" oninput="filterNotificationGroups()" />
+    <select class="select-sm" id="ngStatusFilter" onchange="filterNotificationGroups()">
+      <option value="">Tüm Durumlar</option>
+      <option value="active">Aktif</option>
+      <option value="passive">Pasif</option>
+    </select>
+    <div class="toolbar-right">
+      <button class="btn btn-sm" onclick="resetNotificationGroupFilters()">Temizle</button>
+      <button class="btn btn-primary" onclick="openNotificationGroupModal()">+ Yeni Grup</button>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table class="table" id="notificationGroupTable">
+      <thead>
+        <tr>
+          <th>Grup Adı</th>
+          <th>Açıklama</th>
+          <th>Üye Sayısı</th>
+          <th>Üyeler</th>
+          <th>Durum</th>
+          <th>Güncelleme</th>
+          <th>İşlemler</th>
+        </tr>
+      </thead>
+      <tbody id="ngTbody">
+        <tr class="loading-row"><td colspan="7"><div class="spinner"></div></td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="modal" id="notificationGroupModal">
+  <div class="modal-content wide">
+    <div class="modal-header">
+      <h3 id="ngModalTitle">Yeni Bildirim Grubu</h3>
+      <button class="modal-close" onclick="closeNotificationGroupModal()">✕</button>
+    </div>
+
+    <div class="modal-section-title">Grup Bilgileri</div>
+    <div class="form-grid">
+      <div class="field">
+        <label>Grup Adı <span style="color:var(--danger)">*</span></label>
+        <input id="ng_name" placeholder="Örn: BT Satınalma Grubu" />
+      </div>
+      <div class="field" style="padding-top:24px">
+        <label class="checkbox-label">
+          <input type="checkbox" id="ng_is_active" checked />
+          Aktif Grup
+        </label>
+      </div>
+      <div class="field col-span-2">
+        <label>Açıklama</label>
+        <textarea id="ng_description" placeholder="Grubun amacı / kullanım notu"></textarea>
+      </div>
+    </div>
+
+    <div class="modal-section-title">Bildirim Alacak Kullanıcılar</div>
+    <div class="field">
+      <input id="ngUserSearchInput" placeholder="Kullanıcı adı / ad soyad / e-posta ara..." oninput="renderNotificationGroupUserOptions()" />
+      <div class="form-hint">E-posta adresi olmayan kullanıcılar mail alamaz.</div>
+    </div>
+    <div id="ngUserOptions" style="max-height:280px;overflow:auto;border:1px solid var(--border);border-radius:8px;padding:8px"></div>
+
+    <div class="modal-actions">
+      <button class="btn" onclick="closeNotificationGroupModal()">İptal</button>
+      <button class="btn btn-primary" id="ngSaveBtn" onclick="saveNotificationGroup()">Kaydet</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}<script src="/static/js/notification_groups.js"></script>{% endblock %}

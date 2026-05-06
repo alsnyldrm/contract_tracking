@@ -126,6 +126,16 @@ def settings_page(request: Request, db: Session = Depends(get_db)):
     return request.app.state.templates.TemplateResponse('settings.html', ctx)
 
 
+@router.get('/notification-groups')
+def notification_groups_page(request: Request, db: Session = Depends(get_db)):
+    ctx = _protected_context(request, db)
+    if not ctx:
+        return RedirectResponse('/login')
+    if ctx['user'].role.name != 'admin':
+        return RedirectResponse('/dashboard')
+    return request.app.state.templates.TemplateResponse('notification_groups.html', ctx)
+
+
 @router.get('/profile')
 def profile_page(request: Request, db: Session = Depends(get_db)):
     ctx = _protected_context(request, db)

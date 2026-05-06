@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.deps import enforce_csrf, get_current_user, require_admin
 from app.core.security import now_utc
-from app.models import Contract, ContractTag, ContractType, Currency, Institution, Tag, User
+from app.models import Contract, ContractTag, ContractType, Currency, Institution, NotificationGroup, Tag, User
 from app.services.audit_service import add_audit_log
 from app.services.ldap_service import search_ldap_users
 
@@ -29,7 +29,14 @@ def _get_tags(db: Session, contract_id: int) -> list[str]:
     return [r.name for r in rows]
 
 
-def _serialize_contract(c: Contract, institution_name: str | None = None, tags: list | None = None, currency_symbol: str | None = None, contract_type_name: str | None = None):
+def _serialize_contract(
+    c: Contract,
+    institution_name: str | None = None,
+    tags: list | None = None,
+    currency_symbol: str | None = None,
+    contract_type_name: str | None = None,
+    notification_group_name: str | None = None,
+):
     return {
         'id':                        c.id,
         'contract_number':           c.contract_number,
@@ -47,6 +54,8 @@ def _serialize_contract(c: Contract, institution_name: str | None = None, tags: 
         'currency_symbol':           currency_symbol,
         'vat_included':              c.vat_included,
         'payment_period':            c.payment_period,
+        'notification_group_id':     c.notification_group_id,
+        'notification_group_name':   notification_group_name,
         'responsible_person_name':   c.responsible_person_name,
         'responsible_person_email':  c.responsible_person_email,
         'responsible_person_username': c.responsible_person_username,
@@ -73,6 +82,20 @@ def _coerce_int(value: str | None) -> int | None:
         return int(value)
     except (TypeError, ValueError):
         return None
+
+
+def _resolve_notification_group_id(db: Session, value) -> int | None:
+    if value in (None, ''):
+        return None
+    try:
+        group_id = int(value)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail='Bildirim grubu değeri geçersiz')
+
+    group = db.query(NotificationGroup).filter(NotificationGroup.id == group_id).first()
+    if not group:
+        raise HTTPException(status_code=400, detail='Seçilen bildirim grubu bulunamadı')
+    return group.id
 
 
 @router.get('/')
@@ -102,8 +125,9 @@ def list_contracts(
         sort_by = 'updated_at'
 
     query = (
-        db.query(Contract, Institution.name)
+        db.query(Contract, Institution.name, NotificationGroup.name)
         .join(Institution, Institution.id == Contract.institution_id)
+        .outerjoin(NotificationGroup, NotificationGroup.id == Contract.notification_group_id)
         .filter(Contract.is_deleted.is_(False))
     )
 
@@ -146,9 +170,9 @@ def list_contracts(
     query = query.order_by(sort_col.desc() if sort_dir == 'desc' else sort_col.asc())
 
     total = query.count()
-    rows  = query.offset((page - 1) * page_size).limit(page_size).all()
+    rows = query.offset((page - 1) * page_size).limit(page_size).all()
 
-    contract_ids = [c.id for c, _ in rows]
+    contract_ids = [c.id for c, _, _ in rows]
     tags_map: dict[int, list[str]] = {}
     if contract_ids:
         tag_rows = (
@@ -161,14 +185,14 @@ def list_contracts(
             tags_map.setdefault(cid, []).append(tname)
 
     currency_map: dict[int, str] = {}
-    for c, _ in rows:
+    for c, _, _ in rows:
         if c.currency_id and c.currency_id not in currency_map:
             cur = db.query(Currency).filter(Currency.id == c.currency_id).first()
             if cur:
                 currency_map[c.currency_id] = cur.symbol or cur.code
 
     type_map: dict[int, str] = {}
-    for c, _ in rows:
+    for c, _, _ in rows:
         if c.contract_type_id and c.contract_type_id not in type_map:
             ct = db.query(ContractType).filter(ContractType.id == c.contract_type_id).first()
             if ct:
@@ -182,8 +206,9 @@ def list_contracts(
                 tags=tags_map.get(c.id, []),
                 currency_symbol=currency_map.get(c.currency_id),
                 contract_type_name=type_map.get(c.contract_type_id),
+                notification_group_name=notification_group_name,
             )
-            for c, name in rows
+            for c, name, notification_group_name in rows
         ],
     }
 
@@ -238,12 +263,18 @@ def get_contract(contract_id: int, user: User = Depends(get_current_user), db: S
         ct = db.query(ContractType).filter(ContractType.id == row.contract_type_id).first()
         if ct:
             type_name = ct.name
+    notification_group_name = None
+    if row.notification_group_id:
+        ng = db.query(NotificationGroup).filter(NotificationGroup.id == row.notification_group_id).first()
+        if ng:
+            notification_group_name = ng.name
     return _serialize_contract(
         row,
         institution_name=institution.name if institution else None,
         tags=tags,
         currency_symbol=currency_symbol,
         contract_type_name=type_name,
+        notification_group_name=notification_group_name,
     )
 
 
@@ -274,6 +305,7 @@ def create_contract(
         currency_id=payload.get('currency_id'),
         vat_included=bool(payload.get('vat_included', False)),
         payment_period=payload.get('payment_period'),
+        notification_group_id=_resolve_notification_group_id(db, payload.get('notification_group_id')),
         responsible_person_name=payload.get('responsible_person_name'),
         responsible_person_email=payload.get('responsible_person_email'),
         responsible_person_username=payload.get('responsible_person_username'),
@@ -334,6 +366,8 @@ def update_contract(
     for field in editable:
         if field in payload:
             setattr(row, field, payload[field])
+    if 'notification_group_id' in payload:
+        row.notification_group_id = _resolve_notification_group_id(db, payload.get('notification_group_id'))
     row.updated_by_user_id = user.id
     row.updated_at = now_utc()
 
