@@ -58,7 +58,10 @@ body {
   flex-shrink: 0;
   transition: width .22s ease, padding .22s ease, opacity .18s ease;
   overflow: hidden;
-  position: relative;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
   z-index: 30;
 }
 .sidebar .brand { display: flex; gap: 10px; align-items: center; margin-bottom: 22px; padding-right: 30px; }

@@ -1,6 +1,6 @@
 let autoTimer = null;
 let currentRows = [];
-const LOG_TYPE_LABELS = { all: 'hepsi' };
+const LOG_TYPE_LABELS = { all: 'Hepsi' };
 const LEVEL_BADGE = {
   DEBUG:    '<span class="badge badge-gray">DEBUG</span>',
   INFO:     '<span class="badge badge-blue">INFO</span>',
@@ -45,12 +45,14 @@ async function loadLogs() {
       const lvl    = (r.level || '').toUpperCase();
       const rowCls = `log-row-${lvl}`;
       const badge  = LEVEL_BADGE[lvl] || `<span class="badge badge-gray">${escHtml(r.level || '?')}</span>`;
+      const fullMessage = String(r.message || '');
+      const shortMessage = fullMessage.length > 140 ? `${fullMessage.slice(0, 140)}...` : fullMessage;
       return `<tr class="${rowCls}">
         <td class="td-nowrap" style="font-size:11.5px;font-family:monospace">${escHtml(r.timestamp || '')}</td>
         <td>${badge}</td>
         <td class="td-muted" style="font-size:12px">${escHtml(r.module || r.name || '')}</td>
-        <td style="font-size:12.5px">${escHtml(r.message || '')}</td>
-        <td><button class="btn btn-xs log-detail-btn" data-row-index="${idx}">Detay</button></td>
+        <td class="td-truncate" title="${escHtml(fullMessage)}" style="font-size:12.5px;max-width:520px">${escHtml(shortMessage)}</td>
+        <td><button type="button" class="btn btn-xs log-detail-btn" data-row-index="${idx}">Detay</button></td>
       </tr>`;
     }).join('');
   } catch (e) {

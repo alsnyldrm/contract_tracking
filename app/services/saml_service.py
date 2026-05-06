@@ -169,13 +169,16 @@ def _as_mapping_value(mapping: dict, *keys: str) -> str | None:
     return None
 
 
-def process_acs(db: Session, request: Request, post_data: dict) -> User:
+def process_acs(db: Session, request: Request, saml_data: dict, method: str = 'POST') -> User:
     setting = get_saml_setting(db)
     if not setting or not setting.enabled:
         raise ValueError('SAML etkin değil')
 
     req_data = _prepare_request(request)
-    req_data['post_data'] = post_data
+    if str(method or '').upper() == 'GET':
+        req_data['get_data'] = dict(saml_data or {})
+    else:
+        req_data['post_data'] = dict(saml_data or {})
     auth = OneLogin_Saml2_Auth(req_data, _build_settings(setting, request))
     auth.process_response()
     errors = auth.get_errors()
@@ -212,7 +215,9 @@ def process_acs(db: Session, request: Request, post_data: dict) -> User:
     if not email and username and EMAIL_PATTERN.match(username):
         email = username
 
-    user = db.query(User).filter(User.username == username, User.is_deleted.is_(False)).first()
+    user = db.query(User).filter(User.username == username).first()
+    if not user and email:
+        user = db.query(User).filter(User.email == email).first()
     if not user:
         readonly_role = db.query(Role).filter(Role.name == 'readonly').first()
         user = User(
@@ -234,6 +239,21 @@ def process_acs(db: Session, request: Request, post_data: dict) -> User:
         db.refresh(user)
     else:
         changed = False
+        if user.is_deleted:
+            user.is_deleted = False
+            user.deleted_at = None
+            changed = True
+        if not user.is_active:
+            user.is_active = True
+            changed = True
+        if user.auth_source != 'saml':
+            user.auth_source = 'saml'
+            changed = True
+        if user.username != username:
+            username_owner = db.query(User).filter(User.username == username, User.id != user.id).first()
+            if not username_owner:
+                user.username = username
+                changed = True
         if display_name and user.full_name != display_name:
             user.full_name = display_name
             changed = True

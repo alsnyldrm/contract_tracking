@@ -89,7 +89,7 @@ async def saml_acs(request: Request, db: Session = Depends(get_db)):
     form = await request.form()
     post_data = {k: v for k, v in form.items()}
     try:
-        user = process_acs(db, request, post_data)
+        user = process_acs(db, request, post_data, method='POST')
         redirect = RedirectResponse('/dashboard', status_code=302)
         create_session(db, redirect, user, request.client.host if request.client else None, request.headers.get('user-agent'))
         return redirect
@@ -98,8 +98,47 @@ async def saml_acs(request: Request, db: Session = Depends(get_db)):
         return RedirectResponse('/login?error=samlacs')
 
 
+@router.get('/auth/saml/acs')
+def saml_acs_get(request: Request, db: Session = Depends(get_db)):
+    query_data = dict(request.query_params)
+    if not query_data:
+        return RedirectResponse('/login?error=samlacs')
+    try:
+        user = process_acs(db, request, query_data, method='GET')
+        redirect = RedirectResponse('/dashboard', status_code=302)
+        create_session(db, redirect, user, request.client.host if request.client else None, request.headers.get('user-agent'))
+        return redirect
+    except Exception as exc:
+        log_event('saml', logging.ERROR, 'SAML ACS GET hatası', module='saml', action='acs_get', request_id=getattr(request.state, 'request_id', None), details={'error': str(exc)}, exc_info=exc)
+        return RedirectResponse('/login?error=samlacs')
+
+
+@router.post('/login')
+async def login_post_compat(request: Request, db: Session = Depends(get_db)):
+    form = await request.form()
+    form_data = {k: v for k, v in form.items()}
+    if 'SAMLResponse' in form_data:
+        try:
+            user = process_acs(db, request, form_data, method='POST')
+            redirect = RedirectResponse('/dashboard', status_code=302)
+            create_session(db, redirect, user, request.client.host if request.client else None, request.headers.get('user-agent'))
+            return redirect
+        except Exception as exc:
+            log_event('saml', logging.ERROR, 'SAML /login fallback hatası', module='saml', action='acs_login_fallback', request_id=getattr(request.state, 'request_id', None), details={'error': str(exc)}, exc_info=exc)
+            return RedirectResponse('/login?error=samlacs')
+    return RedirectResponse('/login', status_code=303)
+
+
 @router.get('/auth/saml/metadata')
 def saml_metadata(request: Request, db: Session = Depends(get_db), download: bool = Query(default=False)):
     metadata = get_metadata(db, request)
     headers = {'Content-Disposition': 'attachment; filename="metadata.xml"'} if download else None
     return FastAPIResponse(content=metadata, media_type='application/samlmetadata+xml', headers=headers)
+
+
+@router.head('/auth/saml/metadata')
+def saml_metadata_head(request: Request, db: Session = Depends(get_db), download: bool = Query(default=False)):
+    metadata = get_metadata(db, request)
+    headers = {'Content-Disposition': 'attachment; filename="metadata.xml"'} if download else {}
+    headers['Content-Length'] = str(len(metadata.encode('utf-8')))
+    return FastAPIResponse(content='', media_type='application/samlmetadata+xml', headers=headers)
