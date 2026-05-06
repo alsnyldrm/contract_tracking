@@ -19,6 +19,7 @@
         <option value="saml">SAML</option>
         <option value="ldap">LDAP</option>
       </select>
+      <button class="btn btn-primary btn-sm" onclick="openUserModal()">+ Yeni Kullanıcı</button>
     </div>
   </div>
 
@@ -49,6 +50,64 @@
         SAML/Microsoft Entra ID ile giriş yapan kullanıcılar otomatik olarak <strong>readonly</strong> rolüyle oluşturulur.
         Burada rollerini değiştirebilirsiniz.
       </span>
+    </div>
+  </div>
+</div>
+
+<!-- Yeni kullanıcı modal -->
+<div class="modal" id="userModal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>Yeni Kullanıcı</h3>
+      <button class="modal-close" onclick="closeUserModal()">✕</button>
+    </div>
+    <div class="field">
+      <label>Kullanıcı Adı</label>
+      <input id="u_username" placeholder="Kullanıcı adı" autocomplete="off" />
+    </div>
+    <div class="field">
+      <label>Ad Soyad</label>
+      <input id="u_full_name" placeholder="Ad Soyad" autocomplete="off" />
+    </div>
+    <div class="field">
+      <label>E-posta (opsiyonel)</label>
+      <input id="u_email" type="email" placeholder="ornek@fbu.edu.tr" autocomplete="off" />
+    </div>
+    <div class="field">
+      <label>Şifre</label>
+      <input id="u_password" type="password" placeholder="En az 8 karakter" autocomplete="new-password" />
+    </div>
+    <div class="field">
+      <label>Rol</label>
+      <select id="u_role">
+        <option value="readonly">Read Only (Salt Okunur)</option>
+        <option value="admin">Admin (Yönetici)</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeUserModal()">İptal</button>
+      <button class="btn btn-primary" onclick="saveUser()">Kaydet</button>
+    </div>
+  </div>
+</div>
+
+<!-- Şifre sıfırlama modal -->
+<div class="modal" id="resetPwModal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>Şifre Sıfırla</h3>
+      <button class="modal-close" onclick="closeResetPwModal()">✕</button>
+    </div>
+    <div class="field" style="margin-bottom:0">
+      <label>Kullanıcı: <strong id="resetPwUserLabel">—</strong></label>
+    </div>
+    <div class="field" style="margin-top:14px">
+      <label>Yeni Şifre</label>
+      <input id="rp_password" type="password" placeholder="En az 8 karakter" autocomplete="new-password" />
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeResetPwModal()">İptal</button>
+      <button class="btn btn-primary" onclick="submitResetPw()">Sıfırla</button>
     </div>
   </div>
 </div>

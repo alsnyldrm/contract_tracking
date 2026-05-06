@@ -1,5 +1,6 @@
 let allUsers = [];
 let roleChangeUserId = null;
+let resetPwUserId = null;
 
 function authSourceLabel(src) {
   const map = { local: 'Yerel', ldap: 'LDAP / AD', saml: 'SAML / SSO' };
@@ -74,9 +75,12 @@ function renderUsers(users) {
       <td>${activeBadge}</td>
       <td class="td-muted" style="font-size:12px">${formatDate(u.created_at)}</td>
       <td>
-        <button class="btn btn-sm btn-secondary" onclick="openRoleModal(${u.id}, '${escHtml(u.username)}', '${u.role}')">
-          Rol Değiştir
-        </button>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn btn-sm btn-secondary" onclick="openRoleModal(${u.id}, '${escHtml(u.username)}', '${u.role}')">Rol</button>
+          ${u.auth_source === 'local' ? `<button class="btn btn-sm" onclick="openResetPwModal(${u.id}, '${escHtml(u.username)}')">Şifre</button>` : ''}
+          <button class="btn btn-sm" onclick="toggleActive(${u.id}, ${!u.is_active})">${u.is_active ? 'Pasifleştir' : 'Aktifleştir'}</button>
+          <button class="btn btn-sm btn-danger" onclick="deleteUser(${u.id}, '${escHtml(u.username)}')">Sil</button>
+        </div>
       </td>
     </tr>`;
   }).join('');
@@ -108,6 +112,88 @@ async function changeRole(id, role) {
   try {
     await api(`/api/users/${id}/role`, { method: 'PUT', body: JSON.stringify({ role }) });
     showToast('Rol güncellendi', 'success');
+    await loadUsers();
+  } catch (e) { showToast(e.message, 'error'); }
+}
+
+/* ── Yeni kullanıcı modal ── */
+function openUserModal() {
+  document.getElementById('u_username').value = '';
+  document.getElementById('u_full_name').value = '';
+  document.getElementById('u_email').value = '';
+  document.getElementById('u_password').value = '';
+  document.getElementById('u_role').value = 'readonly';
+  document.getElementById('userModal').classList.add('open');
+}
+function closeUserModal() { document.getElementById('userModal').classList.remove('open'); }
+
+async function saveUser() {
+  const payload = {
+    username: document.getElementById('u_username').value.trim(),
+    full_name: document.getElementById('u_full_name').value.trim(),
+    email: document.getElementById('u_email').value.trim(),
+    password: document.getElementById('u_password').value,
+    role: document.getElementById('u_role').value,
+  };
+  if (!payload.username || !payload.full_name || !payload.password) {
+    showToast('Kullanıcı adı, ad soyad ve şifre zorunludur', 'error');
+    return;
+  }
+  if (payload.password.length < 8) {
+    showToast('Şifre en az 8 karakter olmalı', 'error');
+    return;
+  }
+  try {
+    await api('/api/users/', { method: 'POST', body: JSON.stringify(payload) });
+    showToast('Kullanıcı oluşturuldu', 'success');
+    closeUserModal();
+    await loadUsers();
+  } catch (e) {
+    showToast(e.message, 'error');
+  }
+}
+
+/* ── Şifre sıfırlama modal ── */
+function openResetPwModal(id, username) {
+  resetPwUserId = id;
+  document.getElementById('resetPwUserLabel').textContent = username;
+  document.getElementById('rp_password').value = '';
+  document.getElementById('resetPwModal').classList.add('open');
+}
+function closeResetPwModal() {
+  document.getElementById('resetPwModal').classList.remove('open');
+  resetPwUserId = null;
+}
+
+async function submitResetPw() {
+  const password = document.getElementById('rp_password').value;
+  if (!password || password.length < 8) {
+    showToast('Şifre en az 8 karakter olmalı', 'error');
+    return;
+  }
+  try {
+    await api(`/api/users/${resetPwUserId}/reset-password`, { method: 'PUT', body: JSON.stringify({ password }) });
+    showToast('Şifre sıfırlandı', 'success');
+    closeResetPwModal();
+  } catch (e) {
+    showToast(e.message, 'error');
+  }
+}
+
+/* ── Aktif/Pasif ve Silme ── */
+async function toggleActive(id, isActive) {
+  try {
+    await api(`/api/users/${id}/active`, { method: 'PUT', body: JSON.stringify({ is_active: isActive }) });
+    showToast(isActive ? 'Kullanıcı aktifleştirildi' : 'Kullanıcı pasifleştirildi', 'success');
+    await loadUsers();
+  } catch (e) { showToast(e.message, 'error'); }
+}
+
+async function deleteUser(id, username) {
+  if (!confirm(`"${username}" kullanıcısı silinsin mi?`)) return;
+  try {
+    await api(`/api/users/${id}`, { method: 'DELETE', body: JSON.stringify({}) });
+    showToast('Kullanıcı silindi', 'success');
     await loadUsers();
   } catch (e) { showToast(e.message, 'error'); }
 }

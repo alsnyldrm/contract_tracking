@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from fastapi import Depends, HTTPException, Request, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.core.config import get_settings
 from app.core.database import get_db
@@ -32,7 +32,12 @@ def get_auth_context(request: Request, db: Session = Depends(get_db)) -> AuthCon
     if not session or session.expires_at < datetime.now(timezone.utc):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Oturum süresi doldu')
 
-    user = db.query(User).filter(User.id == session.user_id, User.is_deleted.is_(False)).first()
+    user = (
+        db.query(User)
+        .options(joinedload(User.role))
+        .filter(User.id == session.user_id, User.is_deleted.is_(False))
+        .first()
+    )
     if not user or not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Kullanıcı pasif')
 

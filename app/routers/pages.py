@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import RedirectResponse
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.core.config import get_settings
 from app.core.database import get_db
@@ -21,7 +21,12 @@ def _get_user_from_cookie(request: Request, db: Session) -> User | None:
     session = db.query(UserSession).filter(UserSession.session_token_hash == token_fingerprint(token)).first()
     if not session or session.expires_at < datetime.now(timezone.utc):
         return None
-    user = db.query(User).filter(User.id == session.user_id, User.is_deleted.is_(False), User.is_active.is_(True)).first()
+    user = (
+        db.query(User)
+        .options(joinedload(User.role))
+        .filter(User.id == session.user_id, User.is_deleted.is_(False), User.is_active.is_(True))
+        .first()
+    )
     return user
 
 
