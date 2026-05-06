@@ -212,19 +212,6 @@
       <h3>SMTP / E-posta Bildirim Ayarları</h3>
     </div>
     <div style="max-width:600px">
-      <div class="field" style="margin-bottom:14px">
-        <label>Gönderim Modu</label>
-        <div class="field-inline" style="gap:14px;flex-wrap:wrap">
-          <label class="checkbox-label">
-            <input type="radio" name="smtp_auth_mode" id="smtp_auth_mode_auth" value="auth" checked />
-            Kimlik Doğrulama
-          </label>
-          <label class="checkbox-label">
-            <input type="radio" name="smtp_auth_mode" id="smtp_auth_mode_relay" value="relay" />
-            Relay (Kullanıcı/Şifre Yok)
-          </label>
-        </div>
-      </div>
       <div class="form-grid">
         <div class="field">
           <label>SMTP Host</label>
@@ -249,14 +236,30 @@
         </div>
       </div>
       <div style="margin-bottom:16px">
-        <label class="checkbox-label">
-          <input type="checkbox" id="smtp_tls_ssl" />
-          TLS/SSL Aktif (STARTTLS)
-        </label>
+        <div class="field-inline" style="gap:20px;flex-wrap:wrap">
+          <label class="checkbox-label">
+            <input type="checkbox" id="smtp_tls_ssl" />
+            TLS/SSL Aktif (STARTTLS)
+          </label>
+          <label class="checkbox-label">
+            <input type="checkbox" id="smtp_relay_mode" />
+            Relay (Kullanıcı/Şifre Yok)
+          </label>
+        </div>
       </div>
       <div class="toolbar" style="margin-bottom:0">
         <button class="btn btn-primary" onclick="saveSmtp()">Ayarları Kaydet</button>
         <button class="btn" onclick="testSmtp()">📧 Test Mail Gönder</button>
+      </div>
+      <div id="smtpTestArea" style="display:none;margin-top:10px">
+        <div class="field" style="margin-bottom:8px">
+          <label>Test Alıcı E-posta</label>
+          <input type="email" id="smtp_test_to" placeholder="ornek@fbu.edu.tr" />
+        </div>
+        <div class="field-inline" style="gap:8px">
+          <button class="btn" id="smtpTestSendBtn" onclick="sendTestSmtp()">Gönder</button>
+          <button class="btn" onclick="toggleSmtpTestInput(false)">Vazgeç</button>
+        </div>
       </div>
       <div id="smtpResult" style="display:none;margin-top:10px"></div>
     </div>

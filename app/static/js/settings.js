@@ -68,8 +68,9 @@ async function loadSettings() {
   set('smtp_password',     data.smtp.password || '');
   set('smtp_sender_email', data.smtp.sender_email);
   chk('smtp_tls_ssl',      data.smtp.tls_ssl);
-  setSelectedSmtpAuthMode(data.smtp.auth_mode || 'auth');
-  updateSmtpAuthModeUI();
+  setSmtpRelayMode(!!data.smtp.relay_mode || data.smtp.auth_mode === 'relay');
+  updateSmtpRelayModeUI();
+  toggleSmtpTestInput(false);
 
   /* Log settings */
   set('log_max_file_size_mb',    data.log_settings.max_file_size_mb || 20);
@@ -84,22 +85,17 @@ function updateTzClock(tz) {
 }
 
 /* ── SMTP mode UI ── */
-function getSelectedSmtpAuthMode() {
-  const el = document.querySelector('input[name="smtp_auth_mode"]:checked');
-  return el?.value === 'relay' ? 'relay' : 'auth';
+function getSmtpRelayMode() {
+  return !!document.getElementById('smtp_relay_mode')?.checked;
 }
 
-function setSelectedSmtpAuthMode(mode) {
-  const auth = document.getElementById('smtp_auth_mode_auth');
-  const relay = document.getElementById('smtp_auth_mode_relay');
-  if (!auth || !relay) return;
-  const selected = mode === 'relay' ? 'relay' : 'auth';
-  auth.checked = selected === 'auth';
-  relay.checked = selected === 'relay';
+function setSmtpRelayMode(val) {
+  const el = document.getElementById('smtp_relay_mode');
+  if (el) el.checked = !!val;
 }
 
-function updateSmtpAuthModeUI() {
-  const isRelay = getSelectedSmtpAuthMode() === 'relay';
+function updateSmtpRelayModeUI() {
+  const isRelay = getSmtpRelayMode();
   const username = document.getElementById('smtp_username');
   const password = document.getElementById('smtp_password');
   const userField = document.getElementById('smtpUsernameField');
@@ -197,11 +193,11 @@ async function saveSaml() {
 
 /* ── SMTP ── */
 async function saveSmtp() {
-  const authMode = getSelectedSmtpAuthMode();
+  const isRelay = getSmtpRelayMode();
   const username = document.getElementById('smtp_username').value.trim();
   const password = document.getElementById('smtp_password').value;
 
-  if (authMode === 'auth' && !username) {
+  if (!isRelay && !username) {
     showToast('Kimlik doğrulama modunda kullanıcı adı zorunludur', 'warn');
     return;
   }
@@ -209,35 +205,60 @@ async function saveSmtp() {
   const payload = {
     host:         document.getElementById('smtp_host').value.trim(),
     port:         Number(document.getElementById('smtp_port').value) || 587,
-    auth_mode:    authMode,
-    username:     authMode === 'relay' ? '' : username,
-    password:     authMode === 'relay' ? '' : password,
+    relay_mode:   isRelay,
+    username:     isRelay ? '' : username,
+    password:     isRelay ? '' : password,
     sender_email: document.getElementById('smtp_sender_email').value.trim(),
     tls_ssl:      document.getElementById('smtp_tls_ssl').checked,
   };
   try {
     await api('/api/settings/smtp', { method: 'PUT', body: JSON.stringify(payload) });
     showToast('SMTP ayarları kaydedildi', 'success');
-    document.getElementById('smtp_password').value = authMode === 'auth' ? '••••••••' : '';
-    updateSmtpAuthModeUI();
+    document.getElementById('smtp_password').value = isRelay ? '' : '********';
+    updateSmtpRelayModeUI();
   } catch (e) { showToast(e.message, 'error'); }
 }
 
 async function testSmtp() {
-  const btn = event.target;
+  toggleSmtpTestInput();
+}
+
+function toggleSmtpTestInput(show) {
+  const area = document.getElementById('smtpTestArea');
+  if (!area) return;
+  const shouldShow = typeof show === 'boolean' ? show : area.style.display === 'none';
+  area.style.display = shouldShow ? '' : 'none';
+  if (shouldShow) {
+    const input = document.getElementById('smtp_test_to');
+    if (input) {
+      input.value = input.value || document.getElementById('smtp_sender_email')?.value || '';
+      input.focus();
+    }
+  }
+}
+
+async function sendTestSmtp() {
+  const btn = document.getElementById('smtpTestSendBtn');
   const resultEl = document.getElementById('smtpResult');
+  const toEmail = (document.getElementById('smtp_test_to')?.value || '').trim();
+  if (!toEmail) {
+    showToast('Test alıcı e-posta adresi giriniz', 'warn');
+    return;
+  }
+
   btn.disabled = true; btn.textContent = '🔄 Gönderiliyor…';
   try {
-    const result = await api('/api/settings/smtp/test', { method: 'POST', body: JSON.stringify({}) });
+    const result = await api('/api/settings/smtp/test', { method: 'POST', body: JSON.stringify({ to: toEmail }) });
     resultEl.className = result.ok ? 'alert alert-success' : 'alert alert-error';
     resultEl.innerHTML = `<span>${result.ok ? '✓' : '✕'}</span><span>${escHtml(result.message)}</span>`;
     resultEl.style.display = '';
+    if (result.ok) toggleSmtpTestInput(false);
   } catch (e) {
     resultEl.className = 'alert alert-error';
     resultEl.innerHTML = `<span>✕</span><span>${escHtml(e.message)}</span>`;
     resultEl.style.display = '';
   } finally {
-    btn.disabled = false; btn.textContent = '📧 Test Mail Gönder';
+    btn.disabled = false; btn.textContent = 'Gönder';
   }
 }
 
@@ -289,9 +310,7 @@ document.addEventListener('DOMContentLoaded', () => {
   loadSettings();
   loadReportModulesSettings();
 
-  document.querySelectorAll('input[name="smtp_auth_mode"]').forEach(el => {
-    el.addEventListener('change', updateSmtpAuthModeUI);
-  });
+  document.getElementById('smtp_relay_mode')?.addEventListener('change', updateSmtpRelayModeUI);
 
   /* Timezone clock updater */
   setInterval(() => {

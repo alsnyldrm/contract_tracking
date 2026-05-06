@@ -71,6 +71,7 @@ def get_settings_bundle(_: User = Depends(require_admin), db: Session = Depends(
             'username': smtp.username if smtp else '',
             'password': _masked(smtp.password if smtp else ''),
             'auth_mode': _smtp_auth_mode(smtp),
+            'relay_mode': _smtp_auth_mode(smtp) == 'relay',
             'tls_ssl': smtp.tls_ssl if smtp else True,
             'sender_email': smtp.sender_email if smtp else '',
         },
@@ -185,7 +186,11 @@ def update_smtp(payload: dict, request: Request, admin: User = Depends(require_a
         if field in payload:
             setattr(row, field, payload[field])
 
-    auth_mode = str(payload.get('auth_mode') or _smtp_auth_mode(row)).lower()
+    relay_mode = payload.get('relay_mode')
+    if relay_mode is None:
+        auth_mode = str(payload.get('auth_mode') or _smtp_auth_mode(row)).lower()
+    else:
+        auth_mode = 'relay' if bool(relay_mode) else 'auth'
     if auth_mode not in SMTP_AUTH_MODES:
         raise HTTPException(status_code=400, detail='Geçersiz SMTP modu')
 
