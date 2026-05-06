@@ -68,6 +68,8 @@ async function loadSettings() {
   set('smtp_password',     data.smtp.password || '');
   set('smtp_sender_email', data.smtp.sender_email);
   chk('smtp_tls_ssl',      data.smtp.tls_ssl);
+  setSelectedSmtpAuthMode(data.smtp.auth_mode || 'auth');
+  updateSmtpAuthModeUI();
 
   /* Log settings */
   set('log_max_file_size_mb',    data.log_settings.max_file_size_mb || 20);
@@ -79,6 +81,40 @@ function updateTzClock(tz) {
   const el = document.getElementById('currentTzTime');
   if (!el) return;
   el.textContent = new Date().toLocaleString('tr-TR', { timeZone: tz });
+}
+
+/* ── SMTP mode UI ── */
+function getSelectedSmtpAuthMode() {
+  const el = document.querySelector('input[name="smtp_auth_mode"]:checked');
+  return el?.value === 'relay' ? 'relay' : 'auth';
+}
+
+function setSelectedSmtpAuthMode(mode) {
+  const auth = document.getElementById('smtp_auth_mode_auth');
+  const relay = document.getElementById('smtp_auth_mode_relay');
+  if (!auth || !relay) return;
+  const selected = mode === 'relay' ? 'relay' : 'auth';
+  auth.checked = selected === 'auth';
+  relay.checked = selected === 'relay';
+}
+
+function updateSmtpAuthModeUI() {
+  const isRelay = getSelectedSmtpAuthMode() === 'relay';
+  const username = document.getElementById('smtp_username');
+  const password = document.getElementById('smtp_password');
+  const userField = document.getElementById('smtpUsernameField');
+  const passField = document.getElementById('smtpPasswordField');
+  const passHint = document.getElementById('smtpPasswordHint');
+
+  if (username) username.disabled = isRelay;
+  if (password) password.disabled = isRelay;
+  if (userField) userField.style.opacity = isRelay ? '0.6' : '';
+  if (passField) passField.style.opacity = isRelay ? '0.6' : '';
+  if (passHint) {
+    passHint.textContent = isRelay
+      ? 'Relay modunda kullanıcı adı/şifre kullanılmaz'
+      : 'Boş bırakılırsa mevcut şifre korunur';
+  }
 }
 
 /* ── Timezone ── */
@@ -161,18 +197,29 @@ async function saveSaml() {
 
 /* ── SMTP ── */
 async function saveSmtp() {
+  const authMode = getSelectedSmtpAuthMode();
+  const username = document.getElementById('smtp_username').value.trim();
+  const password = document.getElementById('smtp_password').value;
+
+  if (authMode === 'auth' && !username) {
+    showToast('Kimlik doğrulama modunda kullanıcı adı zorunludur', 'warn');
+    return;
+  }
+
   const payload = {
     host:         document.getElementById('smtp_host').value.trim(),
     port:         Number(document.getElementById('smtp_port').value) || 587,
-    username:     document.getElementById('smtp_username').value.trim(),
-    password:     document.getElementById('smtp_password').value,
+    auth_mode:    authMode,
+    username:     authMode === 'relay' ? '' : username,
+    password:     authMode === 'relay' ? '' : password,
     sender_email: document.getElementById('smtp_sender_email').value.trim(),
     tls_ssl:      document.getElementById('smtp_tls_ssl').checked,
   };
   try {
     await api('/api/settings/smtp', { method: 'PUT', body: JSON.stringify(payload) });
     showToast('SMTP ayarları kaydedildi', 'success');
-    document.getElementById('smtp_password').value = '••••••••';
+    document.getElementById('smtp_password').value = authMode === 'auth' ? '••••••••' : '';
+    updateSmtpAuthModeUI();
   } catch (e) { showToast(e.message, 'error'); }
 }
 
@@ -241,6 +288,10 @@ document.addEventListener('DOMContentLoaded', () => {
   setupTabs();
   loadSettings();
   loadReportModulesSettings();
+
+  document.querySelectorAll('input[name="smtp_auth_mode"]').forEach(el => {
+    el.addEventListener('change', updateSmtpAuthModeUI);
+  });
 
   /* Timezone clock updater */
   setInterval(() => {

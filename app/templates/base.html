@@ -115,7 +115,14 @@
 <!-- Toast container -->
 <div class="toast-container" id="toastContainer"></div>
 
-<script>window.CT_APP = { timezone: '{{ timezone }}', role: '{{ user.role.name }}', userId: {{ user.id }} };</script>
+<script>
+window.CT_APP = {
+  timezone: '{{ timezone }}',
+  role: '{{ user.role.name }}',
+  userId: {{ user.id }},
+  filterPreferences: {{ (preferences.filter_preferences if preferences and preferences.filter_preferences else {}) | tojson }}
+};
+</script>
 <script src="/static/js/app.js"></script>
 {% block scripts %}{% endblock %}
 </body>

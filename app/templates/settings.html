@@ -212,6 +212,19 @@
       <h3>SMTP / E-posta Bildirim Ayarları</h3>
     </div>
     <div style="max-width:600px">
+      <div class="field" style="margin-bottom:14px">
+        <label>Gönderim Modu</label>
+        <div class="field-inline" style="gap:14px;flex-wrap:wrap">
+          <label class="checkbox-label">
+            <input type="radio" name="smtp_auth_mode" id="smtp_auth_mode_auth" value="auth" checked />
+            Kimlik Doğrulama
+          </label>
+          <label class="checkbox-label">
+            <input type="radio" name="smtp_auth_mode" id="smtp_auth_mode_relay" value="relay" />
+            Relay (Kullanıcı/Şifre Yok)
+          </label>
+        </div>
+      </div>
       <div class="form-grid">
         <div class="field">
           <label>SMTP Host</label>
@@ -221,14 +234,14 @@
           <label>SMTP Port</label>
           <input type="number" id="smtp_port" placeholder="587" min="1" max="65535" />
         </div>
-        <div class="field">
+        <div class="field" id="smtpUsernameField">
           <label>Kullanıcı Adı</label>
           <input id="smtp_username" placeholder="bildirim@kurum.com" />
         </div>
-        <div class="field">
+        <div class="field" id="smtpPasswordField">
           <label>Şifre</label>
           <input type="password" id="smtp_password" placeholder="••••••••" autocomplete="new-password" />
-          <div class="form-hint">Boş bırakılırsa mevcut şifre korunur</div>
+          <div class="form-hint" id="smtpPasswordHint">Boş bırakılırsa mevcut şifre korunur</div>
         </div>
         <div class="field col-span-2">
           <label>Gönderen E-posta</label>

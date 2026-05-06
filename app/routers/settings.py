@@ -16,12 +16,19 @@ from app.services.ldap_service import test_ldap_connection
 from app.services.saml_service import serialize_attribute_mapping
 
 router = APIRouter()
+SMTP_AUTH_MODES = {'auth', 'relay'}
 
 
 def _masked(value: str | None) -> str | None:
     if not value:
         return value
     return '********'
+
+
+def _smtp_auth_mode(row: SmtpSetting | None) -> str:
+    if not row:
+        return 'auth'
+    return 'auth' if (row.username and row.password) else 'relay'
 
 
 @router.get('/')
@@ -63,6 +70,7 @@ def get_settings_bundle(_: User = Depends(require_admin), db: Session = Depends(
             'port': smtp.port if smtp else 587,
             'username': smtp.username if smtp else '',
             'password': _masked(smtp.password if smtp else ''),
+            'auth_mode': _smtp_auth_mode(smtp),
             'tls_ssl': smtp.tls_ssl if smtp else True,
             'sender_email': smtp.sender_email if smtp else '',
         },
@@ -173,11 +181,32 @@ def update_smtp(payload: dict, request: Request, admin: User = Depends(require_a
         row = SmtpSetting(created_at=now_utc(), updated_at=now_utc())
         db.add(row)
 
-    for field in ['host', 'port', 'username', 'tls_ssl', 'sender_email']:
+    for field in ['host', 'port', 'tls_ssl', 'sender_email']:
         if field in payload:
             setattr(row, field, payload[field])
-    if payload.get('password') and payload.get('password') != '********':
-        row.password = payload['password']
+
+    auth_mode = str(payload.get('auth_mode') or _smtp_auth_mode(row)).lower()
+    if auth_mode not in SMTP_AUTH_MODES:
+        raise HTTPException(status_code=400, detail='Geçersiz SMTP modu')
+
+    if auth_mode == 'relay':
+        row.username = None
+        row.password = None
+    else:
+        if 'username' in payload:
+            row.username = (payload.get('username') or '').strip() or None
+        if payload.get('password') and payload.get('password') != '********':
+            row.password = payload['password']
+        if not row.username:
+            raise HTTPException(status_code=400, detail='Kimlik doğrulama modunda SMTP kullanıcı adı zorunludur')
+        if not row.password:
+            raise HTTPException(status_code=400, detail='Kimlik doğrulama modunda SMTP şifresi zorunludur')
+
+    if not row.host:
+        raise HTTPException(status_code=400, detail='SMTP host zorunludur')
+    if not row.sender_email:
+        raise HTTPException(status_code=400, detail='Gönderen e-posta zorunludur')
+
     row.updated_at = now_utc()
     db.commit()
     log_event('settings', logging.INFO, 'SMTP ayarları güncellendi', module='settings', action='smtp_update', user_id=admin.id, username=admin.username, user_role=admin.role.name, request_id=getattr(request.state, 'request_id', None))
@@ -187,11 +216,15 @@ def update_smtp(payload: dict, request: Request, admin: User = Depends(require_a
 @router.post('/smtp/test', dependencies=[Depends(enforce_csrf)])
 def smtp_test(payload: dict, request: Request, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
     row = db.query(SmtpSetting).first()
-    if not row or not row.host:
+    if not row or not row.host or not row.sender_email:
         raise HTTPException(status_code=400, detail='SMTP ayarları eksik')
     to_email = payload.get('to') or row.sender_email
     if not to_email:
         raise HTTPException(status_code=400, detail='Test e-posta alıcısı gerekli')
+
+    auth_mode = _smtp_auth_mode(row)
+    if auth_mode == 'auth' and (not row.username or not row.password):
+        raise HTTPException(status_code=400, detail='SMTP kimlik doğrulama bilgileri eksik')
 
     msg = EmailMessage()
     msg['Subject'] = 'Contract Tracking SMTP Test'
@@ -203,7 +236,7 @@ def smtp_test(payload: dict, request: Request, admin: User = Depends(require_adm
         with smtplib.SMTP(row.host, row.port, timeout=10) as smtp:
             if row.tls_ssl:
                 smtp.starttls()
-            if row.username and row.password:
+            if auth_mode == 'auth':
                 smtp.login(row.username, row.password)
             smtp.send_message(msg)
         log_event('notification', logging.INFO, 'SMTP test mail başarılı', module='smtp', action='test_mail', user_id=admin.id, username=admin.username, request_id=getattr(request.state, 'request_id', None))

@@ -9,7 +9,7 @@ const PAGE_SIZE    = 20;
 let totalCount     = 0;
 let debounceTimer  = null;
 let ldapTimer      = null;
-const CONTRACT_COLUMN_STORAGE_KEY = 'ct_contract_columns_v1';
+const CONTRACT_FILTER_PREF_KEY = 'contracts_columns';
 const CONTRACT_COLUMNS = [
   { key: 'contract_number', label: 'No', index: 1 },
   { key: 'contract_name', label: 'Sözleşme Adı', index: 2 },
@@ -23,6 +23,8 @@ const CONTRACT_COLUMNS = [
   { key: 'actions', label: 'İşlemler', index: 10 },
 ];
 let contractColumnVisibility = {};
+let contractFilterPreferences = {};
+let contractColumnSaveTimer = null;
 
 /* ── Debounce ── */
 function debounceLoad() {
@@ -70,30 +72,43 @@ function getDefaultContractColumnVisibility() {
   return visibility;
 }
 
+function getContractFilterPreferencesFromApp() {
+  const raw = window.CT_APP?.filterPreferences;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  try {
+    return JSON.parse(JSON.stringify(raw));
+  } catch {
+    return {};
+  }
+}
+
 function loadContractColumnVisibility() {
   const visibility = getDefaultContractColumnVisibility();
-  try {
-    const raw = localStorage.getItem(CONTRACT_COLUMN_STORAGE_KEY);
-    if (!raw) return visibility;
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== 'object') return visibility;
-    CONTRACT_COLUMNS.forEach(col => {
-      if (Object.prototype.hasOwnProperty.call(parsed, col.key)) {
-        visibility[col.key] = !!parsed[col.key];
-      }
-    });
-  } catch {
-    return visibility;
-  }
+  const parsed = contractFilterPreferences[CONTRACT_FILTER_PREF_KEY];
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return visibility;
+  CONTRACT_COLUMNS.forEach(col => {
+    if (Object.prototype.hasOwnProperty.call(parsed, col.key)) {
+      visibility[col.key] = !!parsed[col.key];
+    }
+  });
   return visibility;
 }
 
-function saveContractColumnVisibility() {
-  try {
-    localStorage.setItem(CONTRACT_COLUMN_STORAGE_KEY, JSON.stringify(contractColumnVisibility));
-  } catch {
-    /* ignore */
-  }
+function queueSaveContractColumnVisibility() {
+  contractFilterPreferences[CONTRACT_FILTER_PREF_KEY] = { ...contractColumnVisibility };
+  if (window.CT_APP) window.CT_APP.filterPreferences = contractFilterPreferences;
+
+  clearTimeout(contractColumnSaveTimer);
+  contractColumnSaveTimer = setTimeout(async () => {
+    try {
+      await api('/api/profile/preferences', {
+        method: 'PUT',
+        body: JSON.stringify({ filter_preferences: contractFilterPreferences }),
+      });
+    } catch (e) {
+      showToast('Sütun tercihleri kaydedilemedi: ' + e.message, 'warn');
+    }
+  }, 250);
 }
 
 function applyContractColumnVisibility() {
@@ -121,7 +136,7 @@ function renderContractColumnOptions() {
     el.addEventListener('change', e => {
       const key = e.target.dataset.columnKey;
       contractColumnVisibility[key] = !!e.target.checked;
-      saveContractColumnVisibility();
+      queueSaveContractColumnVisibility();
       applyContractColumnVisibility();
     });
   });
@@ -131,7 +146,7 @@ function setAllContractColumns(visible) {
   CONTRACT_COLUMNS.forEach(col => {
     contractColumnVisibility[col.key] = !!visible;
   });
-  saveContractColumnVisibility();
+  queueSaveContractColumnVisibility();
   renderContractColumnOptions();
   applyContractColumnVisibility();
 }
@@ -150,6 +165,7 @@ function closeContractColumnMenu() {
 }
 
 function initContractColumnChooser() {
+  contractFilterPreferences = getContractFilterPreferencesFromApp();
   contractColumnVisibility = loadContractColumnVisibility();
   renderContractColumnOptions();
   applyContractColumnVisibility();
