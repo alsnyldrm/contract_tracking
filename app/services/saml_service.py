@@ -32,6 +32,21 @@ DEFAULT_DISPLAY_NAME_ATTRIBUTES = (
 )
 
 EMAIL_PATTERN = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
+SAML_ACS_BINDING = 'urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST'
+SAML_SLO_BINDING = 'urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect'
+
+
+def get_sp_runtime_config(request: Request) -> dict:
+    base_url = f"{request.url.scheme}://{request.headers.get('host')}"
+    return {
+        'base_url': base_url,
+        'entity_id': f'{base_url}/auth/saml/metadata',
+        'metadata_url': f'{base_url}/auth/saml/metadata',
+        'acs_url': f'{base_url}/auth/saml/acs',
+        'acs_binding': SAML_ACS_BINDING,
+        'sls_url': f'{base_url}/auth/saml/slo',
+        'sls_binding': SAML_SLO_BINDING,
+    }
 
 
 def get_saml_setting(db: Session) -> SamlSetting | None:
@@ -51,19 +66,19 @@ def _prepare_request(request: Request) -> dict:
 
 
 def _build_settings(setting: SamlSetting, request: Request) -> dict:
-    base_url = f"{request.url.scheme}://{request.headers.get('host')}"
+    sp = get_sp_runtime_config(request)
     return {
         'strict': False,
         'debug': False,
         'sp': {
-            'entityId': f'{base_url}/auth/saml/metadata',
+            'entityId': sp['entity_id'],
             'assertionConsumerService': {
-                'url': f'{base_url}/auth/saml/acs',
-                'binding': 'urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST',
+                'url': sp['acs_url'],
+                'binding': sp['acs_binding'],
             },
             'singleLogoutService': {
-                'url': f'{base_url}/auth/saml/slo',
-                'binding': 'urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect',
+                'url': sp['sls_url'],
+                'binding': sp['sls_binding'],
             },
             'x509cert': '',
             'privateKey': '',

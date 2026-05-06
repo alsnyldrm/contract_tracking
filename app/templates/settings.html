@@ -151,6 +151,13 @@
     <div class="panel-header">
       <h3>SAML / Microsoft Entra ID (SSO)</h3>
     </div>
+    <div class="alert alert-info" style="margin-bottom:16px">
+      <span>ℹ</span>
+      <span>
+        Önerilen akış: önce <strong>Uygulama (SP) bilgilerini otomatik doldur</strong>, sonra
+        <strong>metadata.xml indir</strong> ve bu dosyayı Entra ID uygulama entegrasyonuna yükle.
+      </span>
+    </div>
     <div style="margin-bottom:14px">
       <label class="checkbox-label" style="font-size:14px">
         <input type="checkbox" id="saml_enabled" />
@@ -159,31 +166,63 @@
       <div class="form-hint" style="margin-top:4px">Pasif olduğunda login ekranında Microsoft Entra ID butonu görünmez</div>
     </div>
     <div style="max-width:700px">
+      <div class="field" style="margin-bottom:14px">
+        <label>1) Uygulama (SP) Bilgileri — Otomatik</label>
+        <div class="toolbar" style="margin:8px 0 10px 0">
+          <button class="btn" onclick="fillSamlBootstrap()">⚙ Uygulama Bilgilerini Doldur</button>
+          <button class="btn" onclick="downloadSamlMetadata()">⬇ metadata.xml İndir</button>
+        </div>
+        <div class="form-hint" id="samlExportHint">
+          Bu alanlar sunucunun mevcut adresinden otomatik üretilir ve Entra ID tarafında SP tanımı için kullanılır.
+        </div>
+      </div>
+
       <div class="form-grid">
         <div class="field col-span-2">
-          <label>SP Entity ID (Service Provider)</label>
-          <input id="saml_entity_id" placeholder="https://uygulamaniz.com/auth/saml/metadata" />
-          <div class="form-hint">IdP'ye kayıt edilen SP Entity ID'niz</div>
+          <label>SP Metadata URL (Read-only)</label>
+          <input id="saml_sp_metadata_url" readonly />
         </div>
         <div class="field col-span-2">
-          <label>SSO URL (Identity Provider)</label>
+          <label>SP Entity ID (Read-only)</label>
+          <input id="saml_sp_entity_id" readonly />
+        </div>
+        <div class="field col-span-2">
+          <label>SP ACS URL (Read-only)</label>
+          <input id="saml_sp_acs_url" readonly />
+        </div>
+        <div class="field col-span-2">
+          <label>SP SLO URL (Read-only)</label>
+          <input id="saml_sp_sls_url" readonly />
+        </div>
+
+        <div class="field col-span-2">
+          <label>2) IdP Entity ID (Microsoft Entra Issuer)</label>
+          <input id="saml_entity_id" placeholder="https://sts.windows.net/TENANT_GUID/" />
+          <div class="form-hint">Entra ID tarafındaki <strong>Identifier (Entity ID / Issuer)</strong> değeri</div>
+        </div>
+        <div class="field col-span-2">
+          <label>IdP SSO URL (Login URL)</label>
           <input id="saml_sso_url" placeholder="https://login.microsoftonline.com/TENANT_ID/saml2" />
         </div>
         <div class="field col-span-2">
-          <label>SLO URL (Single Logout)</label>
+          <label>IdP SLO URL (Logout URL)</label>
           <input id="saml_slo_url" placeholder="https://login.microsoftonline.com/TENANT_ID/saml2" />
         </div>
+
         <div class="field">
-          <label>E-posta Attribute</label>
+          <label>3) E-posta Attribute</label>
           <input id="saml_email_attribute" placeholder="http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress" />
+          <div class="form-hint">Önerilen (Entra): <code>http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress</code></div>
         </div>
         <div class="field">
           <label>Görünen Ad Attribute</label>
           <input id="saml_display_name_attribute" placeholder="http://schemas.microsoft.com/identity/claims/displayname" />
+          <div class="form-hint">Önerilen (Entra): <code>http://schemas.microsoft.com/identity/claims/displayname</code></div>
         </div>
         <div class="field col-span-2">
           <label>NameID Mapping</label>
           <input id="saml_nameid_mapping" placeholder="urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress" />
+          <div class="form-hint">Önerilen: <code>urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress</code></div>
         </div>
         <div class="field col-span-2">
           <label>X.509 Sertifikası (IdP Public Certificate)</label>

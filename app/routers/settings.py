@@ -14,9 +14,17 @@ from app.core.security import now_utc
 from app.models import AppSetting, LdapSetting, LogSetting, SamlSetting, SmtpSetting, User
 from app.services.audit_service import add_audit_log
 from app.services.ldap_service import test_ldap_connection
-from app.services.saml_service import serialize_attribute_mapping
+from app.services.saml_service import (
+    DEFAULT_DISPLAY_NAME_ATTRIBUTES,
+    DEFAULT_EMAIL_ATTRIBUTES,
+    get_sp_runtime_config,
+    serialize_attribute_mapping,
+)
 
 router = APIRouter()
+DEFAULT_ENTRA_EMAIL_ATTRIBUTE = 'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress'
+DEFAULT_ENTRA_DISPLAY_ATTRIBUTE = 'http://schemas.microsoft.com/identity/claims/displayname'
+DEFAULT_NAMEID_FORMAT = 'urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress'
 SMTP_AUTH_MODES = {'auth', 'relay'}
 
 
@@ -61,9 +69,9 @@ def get_settings_bundle(_: User = Depends(require_admin), db: Session = Depends(
             'slo_url': saml.slo_url if saml else '',
             'x509_certificate': _masked(saml.x509_certificate if saml else ''),
             'attribute_mapping': saml.attribute_mapping if saml else {},
-            'nameid_mapping': saml.nameid_mapping if saml else '',
-            'email_attribute': saml.email_attribute if saml else 'email',
-            'display_name_attribute': saml.display_name_attribute if saml else 'displayName',
+            'nameid_mapping': saml.nameid_mapping if saml and saml.nameid_mapping else DEFAULT_NAMEID_FORMAT,
+            'email_attribute': saml.email_attribute if saml and saml.email_attribute else DEFAULT_ENTRA_EMAIL_ATTRIBUTE,
+            'display_name_attribute': saml.display_name_attribute if saml and saml.display_name_attribute else DEFAULT_ENTRA_DISPLAY_ATTRIBUTE,
             'role_mapping': saml.role_mapping if saml else {},
         },
         'smtp': {
@@ -81,6 +89,21 @@ def get_settings_bundle(_: User = Depends(require_admin), db: Session = Depends(
             'max_file_size_mb': logs.max_file_size_mb if logs else 20,
             'retention_days': logs.retention_days if logs else 30,
             'auto_refresh_seconds': logs.auto_refresh_seconds if logs else 5,
+        },
+    }
+
+
+@router.get('/saml/bootstrap')
+def saml_bootstrap_info(request: Request, _: User = Depends(require_admin)):
+    sp = get_sp_runtime_config(request)
+    return {
+        'sp': sp,
+        'recommended': {
+            'email_attribute': DEFAULT_ENTRA_EMAIL_ATTRIBUTE,
+            'display_name_attribute': DEFAULT_ENTRA_DISPLAY_ATTRIBUTE,
+            'nameid_mapping': DEFAULT_NAMEID_FORMAT,
+            'fallback_email_attributes': list(DEFAULT_EMAIL_ATTRIBUTES),
+            'fallback_display_attributes': list(DEFAULT_DISPLAY_NAME_ATTRIBUTES),
         },
     }
 

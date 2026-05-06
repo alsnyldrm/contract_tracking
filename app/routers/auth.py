@@ -1,6 +1,6 @@
 import logging
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, Response
 from fastapi.responses import JSONResponse, RedirectResponse, Response as FastAPIResponse
 from sqlalchemy.orm import Session
 
@@ -99,6 +99,7 @@ async def saml_acs(request: Request, db: Session = Depends(get_db)):
 
 
 @router.get('/auth/saml/metadata')
-def saml_metadata(request: Request, db: Session = Depends(get_db)):
+def saml_metadata(request: Request, db: Session = Depends(get_db), download: bool = Query(default=False)):
     metadata = get_metadata(db, request)
-    return FastAPIResponse(content=metadata, media_type='text/xml')
+    headers = {'Content-Disposition': 'attachment; filename="metadata.xml"'} if download else None
+    return FastAPIResponse(content=metadata, media_type='application/samlmetadata+xml', headers=headers)

@@ -60,6 +60,7 @@ async function loadSettings() {
   set('saml_x509_certificate',       data.saml.x509_certificate || '');
   set('saml_attribute_mapping',      JSON.stringify(data.saml.attribute_mapping || {}, null, 2));
   set('saml_role_mapping',           JSON.stringify(data.saml.role_mapping || {}, null, 2));
+  await fillSamlBootstrap(true);
 
   /* SMTP */
   set('smtp_host',         data.smtp.host);
@@ -169,6 +170,73 @@ async function testLdap() {
 }
 
 /* ── SAML ── */
+let samlBootstrapCache = null;
+
+async function fetchSamlBootstrap(force = false) {
+  if (samlBootstrapCache && !force) return samlBootstrapCache;
+  samlBootstrapCache = await api('/api/settings/saml/bootstrap');
+  return samlBootstrapCache;
+}
+
+function setReadOnlyValue(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.value = value || '';
+}
+
+function setIfEmptyOrLegacy(id, value, legacyValues = []) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const current = (el.value || '').trim();
+  if (!current || legacyValues.includes(current)) {
+    el.value = value || '';
+  }
+}
+
+async function fillSamlBootstrap(silent = false) {
+  try {
+    const bootstrap = await fetchSamlBootstrap();
+    const sp = bootstrap.sp || {};
+    const recommended = bootstrap.recommended || {};
+
+    setReadOnlyValue('saml_sp_metadata_url', sp.metadata_url);
+    setReadOnlyValue('saml_sp_entity_id', sp.entity_id);
+    setReadOnlyValue('saml_sp_acs_url', sp.acs_url);
+    setReadOnlyValue('saml_sp_sls_url', sp.sls_url);
+
+    setIfEmptyOrLegacy('saml_email_attribute', recommended.email_attribute, ['email', 'mail', 'emailaddress']);
+    setIfEmptyOrLegacy('saml_display_name_attribute', recommended.display_name_attribute, ['displayName', 'name']);
+    setIfEmptyOrLegacy('saml_nameid_mapping', recommended.nameid_mapping, []);
+
+    const hint = document.getElementById('samlExportHint');
+    if (hint && sp.base_url) {
+      hint.innerHTML = `SP bilgileri otomatik üretildi: <code>${escHtml(sp.base_url)}</code> (Metadata/ACS/SLO).`;
+    }
+    if (!silent) showToast('SAML SP bilgileri otomatik dolduruldu', 'success');
+  } catch (e) {
+    if (!silent) showToast('SP bilgileri alınamadı: ' + e.message, 'error');
+  }
+}
+
+async function downloadSamlMetadata() {
+  try {
+    const saved = await saveSaml();
+    if (!saved) return;
+    const res = await api('/auth/saml/metadata?download=1');
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'metadata.xml';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    showToast('metadata.xml indirildi', 'success');
+  } catch (e) {
+    showToast('Metadata export başarısız: ' + e.message, 'error');
+  }
+}
+
 async function saveSaml() {
   let attrMapping = {}, roleMapping = {};
   try { attrMapping = JSON.parse(document.getElementById('saml_attribute_mapping').value || '{}'); } catch { attrMapping = {}; }
@@ -189,7 +257,11 @@ async function saveSaml() {
   try {
     await api('/api/settings/saml', { method: 'PUT', body: JSON.stringify(payload) });
     showToast('SAML ayarları kaydedildi', 'success');
-  } catch (e) { showToast(e.message, 'error'); }
+    return true;
+  } catch (e) {
+    showToast(e.message, 'error');
+    return false;
+  }
 }
 
 /* ── SMTP ── */
