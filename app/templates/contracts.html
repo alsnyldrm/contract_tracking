@@ -31,6 +31,17 @@
       <option value="90">90 Gün</option>
     </select>
     <div class="toolbar-right">
+      <div class="column-picker" id="contractColumnPicker">
+        <button class="btn btn-sm" type="button" onclick="toggleContractColumnMenu(event)">Sütunlar</button>
+        <div class="column-picker-menu" id="contractColumnMenu" style="display:none">
+          <div class="column-picker-title">Sütun Seçimi</div>
+          <div class="column-picker-list" id="contractColumnOptions"></div>
+          <div class="column-picker-actions">
+            <button class="btn btn-xs" type="button" onclick="setAllContractColumns(true)">Tümünü Seç</button>
+            <button class="btn btn-xs" type="button" onclick="setAllContractColumns(false)">Tümünü Kaldır</button>
+          </div>
+        </div>
+      </div>
       <button class="btn btn-sm" onclick="resetFilters()">Temizle</button>
       {% if user.role.name == 'admin' %}
       <button class="btn btn-primary" onclick="openContractModal()">+ Yeni Sözleşme</button>

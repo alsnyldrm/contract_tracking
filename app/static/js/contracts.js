@@ -9,6 +9,20 @@ const PAGE_SIZE    = 20;
 let totalCount     = 0;
 let debounceTimer  = null;
 let ldapTimer      = null;
+const CONTRACT_COLUMN_STORAGE_KEY = 'ct_contract_columns_v1';
+const CONTRACT_COLUMNS = [
+  { key: 'contract_number', label: 'No', index: 1 },
+  { key: 'contract_name', label: 'Sözleşme Adı', index: 2 },
+  { key: 'institution', label: 'Kurum', index: 3 },
+  { key: 'contract_type', label: 'Tür', index: 4 },
+  { key: 'status', label: 'Durum', index: 5 },
+  { key: 'critical_level', label: 'Kritik', index: 6 },
+  { key: 'end_date', label: 'Bitiş', index: 7 },
+  { key: 'amount', label: 'Tutar', index: 8 },
+  { key: 'responsible', label: 'Sorumlu', index: 9 },
+  { key: 'actions', label: 'İşlemler', index: 10 },
+];
+let contractColumnVisibility = {};
 
 /* ── Debounce ── */
 function debounceLoad() {
@@ -49,6 +63,98 @@ function resetFilters() {
   loadContracts();
 }
 
+/* ── Column visibility ── */
+function getDefaultContractColumnVisibility() {
+  const visibility = {};
+  CONTRACT_COLUMNS.forEach(col => { visibility[col.key] = true; });
+  return visibility;
+}
+
+function loadContractColumnVisibility() {
+  const visibility = getDefaultContractColumnVisibility();
+  try {
+    const raw = localStorage.getItem(CONTRACT_COLUMN_STORAGE_KEY);
+    if (!raw) return visibility;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return visibility;
+    CONTRACT_COLUMNS.forEach(col => {
+      if (Object.prototype.hasOwnProperty.call(parsed, col.key)) {
+        visibility[col.key] = !!parsed[col.key];
+      }
+    });
+  } catch {
+    return visibility;
+  }
+  return visibility;
+}
+
+function saveContractColumnVisibility() {
+  try {
+    localStorage.setItem(CONTRACT_COLUMN_STORAGE_KEY, JSON.stringify(contractColumnVisibility));
+  } catch {
+    /* ignore */
+  }
+}
+
+function applyContractColumnVisibility() {
+  const table = document.getElementById('contractTable');
+  if (!table) return;
+
+  CONTRACT_COLUMNS.forEach(col => {
+    const visible = contractColumnVisibility[col.key] !== false;
+    table.querySelectorAll(`thead th:nth-child(${col.index}), tbody td:nth-child(${col.index})`).forEach(cell => {
+      cell.style.display = visible ? '' : 'none';
+    });
+  });
+}
+
+function renderContractColumnOptions() {
+  const container = document.getElementById('contractColumnOptions');
+  if (!container) return;
+  container.innerHTML = CONTRACT_COLUMNS.map(col => `
+    <label class="column-picker-item">
+      <input type="checkbox" data-column-key="${escHtml(col.key)}" ${contractColumnVisibility[col.key] !== false ? 'checked' : ''} />
+      <span>${escHtml(col.label)}</span>
+    </label>`).join('');
+
+  container.querySelectorAll('input[data-column-key]').forEach(el => {
+    el.addEventListener('change', e => {
+      const key = e.target.dataset.columnKey;
+      contractColumnVisibility[key] = !!e.target.checked;
+      saveContractColumnVisibility();
+      applyContractColumnVisibility();
+    });
+  });
+}
+
+function setAllContractColumns(visible) {
+  CONTRACT_COLUMNS.forEach(col => {
+    contractColumnVisibility[col.key] = !!visible;
+  });
+  saveContractColumnVisibility();
+  renderContractColumnOptions();
+  applyContractColumnVisibility();
+}
+
+function toggleContractColumnMenu(e) {
+  if (e) e.stopPropagation();
+  const menu = document.getElementById('contractColumnMenu');
+  if (!menu) return;
+  const isOpen = menu.style.display !== 'none';
+  menu.style.display = isOpen ? 'none' : '';
+}
+
+function closeContractColumnMenu() {
+  const menu = document.getElementById('contractColumnMenu');
+  if (menu) menu.style.display = 'none';
+}
+
+function initContractColumnChooser() {
+  contractColumnVisibility = loadContractColumnVisibility();
+  renderContractColumnOptions();
+  applyContractColumnVisibility();
+}
+
 /* ── Load data ── */
 async function loadContracts() {
   const params = new URLSearchParams({
@@ -66,12 +172,14 @@ async function loadContracts() {
 
   const tbody = document.getElementById('contractTbody');
   tbody.innerHTML = '<tr class="loading-row"><td colspan="10"><div class="spinner"></div></td></tr>';
+  applyContractColumnVisibility();
 
   let data;
   try {
     data = await api('/api/contracts?' + params.toString());
   } catch (e) {
     tbody.innerHTML = `<tr><td colspan="10" class="td-muted" style="text-align:center;padding:24px">${escHtml(e.message)}</td></tr>`;
+    applyContractColumnVisibility();
     return;
   }
 
@@ -87,6 +195,7 @@ async function loadContracts() {
           <p>Filtrelerinizi değiştirmeyi deneyin</p>
         </div>
       </td></tr>`;
+    applyContractColumnVisibility();
     renderPagination();
     return;
   }
@@ -119,6 +228,7 @@ async function loadContracts() {
   }).join('');
 
   renderPagination();
+  applyContractColumnVisibility();
 }
 
 function isExpiring(dateStr) {
@@ -440,15 +550,20 @@ document.addEventListener('click', e => {
   if (!e.target.closest('.autocomplete-wrap')) {
     document.getElementById('responsibleDropdown').style.display = 'none';
   }
+  if (!e.target.closest('.column-picker')) {
+    closeContractColumnMenu();
+  }
 });
 
 document.addEventListener('DOMContentLoaded', async () => {
+  initContractColumnChooser();
   await loadDropdowns();
-  await loadContracts();
 
   /* URL paramları varsa uygula (dashboard linki) */
   const params = new URLSearchParams(location.search);
   if (params.get('sort_by'))    sortField = params.get('sort_by');
   if (params.get('sort_dir'))   sortDir   = params.get('sort_dir');
-  if (params.get('sort_by') || params.get('sort_dir')) loadContracts();
+
+  await loadContracts();
+  updateSortHeaders();
 });
