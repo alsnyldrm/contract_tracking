@@ -263,6 +263,21 @@ html[data-theme='dark'] .table tbody tr:hover { background: rgba(255,255,255,.04
 .td-muted { color: var(--muted); }
 .td-truncate { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+/* Contracts table: keep header labels aligned with body cells */
+#contractTable th,
+#contractTable td { text-align: left; }
+#contractTable th:nth-child(5),
+#contractTable td:nth-child(5),
+#contractTable th:nth-child(6),
+#contractTable td:nth-child(6),
+#contractTable th:nth-child(7),
+#contractTable td:nth-child(7),
+#contractTable th:nth-child(10),
+#contractTable td:nth-child(10) { text-align: center; }
+#contractTable th:nth-child(8),
+#contractTable td:nth-child(8) { text-align: right; }
+#contractTable td:nth-child(10) .table-actions { justify-content: center; }
+
 /* ── Widgets ── */
 .grid { display: grid; gap: 12px; }
 .grid-2 { grid-template-columns: repeat(2, 1fr); }
