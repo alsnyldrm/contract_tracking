@@ -5,6 +5,8 @@ from email.message import EmailMessage
 from email.utils import formataddr
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from onelogin.saml2.constants import OneLogin_Saml2_Constants
+from onelogin.saml2.idp_metadata_parser import OneLogin_Saml2_IdPMetadataParser
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -17,7 +19,13 @@ from app.services.ldap_service import test_ldap_connection
 from app.services.saml_service import (
     DEFAULT_DISPLAY_NAME_ATTRIBUTES,
     DEFAULT_EMAIL_ATTRIBUTES,
+    ALLOWED_AUTHN_CONTEXT_COMPARISONS,
+    DEFAULT_REQUESTED_AUTHN_CONTEXT,
+    DEFAULT_REQUESTED_AUTHN_CONTEXT_COMPARISON,
+    SAML_REQUESTED_AUTHN_CONTEXT_COMPARISON_KEY,
+    SAML_REQUESTED_AUTHN_CONTEXT_KEY,
     get_sp_runtime_config,
+    get_saml_security_preferences,
     serialize_attribute_mapping,
 )
 
@@ -40,6 +48,28 @@ def _smtp_auth_mode(row: SmtpSetting | None) -> str:
     return 'auth' if (row.username and row.password) else 'relay'
 
 
+def _set_app_setting(db: Session, key: str, value: str) -> None:
+    row = db.query(AppSetting).filter(AppSetting.key == key).first()
+    if not row:
+        row = AppSetting(key=key, value=value, created_at=now_utc(), updated_at=now_utc())
+        db.add(row)
+    else:
+        row.value = value
+        row.updated_at = now_utc()
+
+
+def _normalize_pem_certificate(cert_text: str) -> str:
+    cleaned = ''.join(str(cert_text or '').strip().replace('\r', '').replace('\n', '').split())
+    if not cleaned:
+        return ''
+    if cleaned.startswith('-----BEGINCERTIFICATE-----') and cleaned.endswith('-----ENDCERTIFICATE-----'):
+        body = cleaned.replace('-----BEGINCERTIFICATE-----', '').replace('-----ENDCERTIFICATE-----', '')
+    else:
+        body = cleaned
+    lines = [body[i:i + 64] for i in range(0, len(body), 64)]
+    return '-----BEGIN CERTIFICATE-----\n' + '\n'.join(lines) + '\n-----END CERTIFICATE-----'
+
+
 @router.get('/')
 def get_settings_bundle(_: User = Depends(require_admin), db: Session = Depends(get_db)):
     ldap = db.query(LdapSetting).first()
@@ -47,6 +77,7 @@ def get_settings_bundle(_: User = Depends(require_admin), db: Session = Depends(
     smtp = db.query(SmtpSetting).first()
     logs = db.query(LogSetting).first()
     timezone = db.query(AppSetting).filter(AppSetting.key == 'system.timezone').first()
+    saml_security = get_saml_security_preferences(db)
 
     return {
         'timezone': timezone.value if timezone else 'Europe/Istanbul',
@@ -73,6 +104,11 @@ def get_settings_bundle(_: User = Depends(require_admin), db: Session = Depends(
             'email_attribute': saml.email_attribute if saml and saml.email_attribute else DEFAULT_ENTRA_EMAIL_ATTRIBUTE,
             'display_name_attribute': saml.display_name_attribute if saml and saml.display_name_attribute else DEFAULT_ENTRA_DISPLAY_ATTRIBUTE,
             'role_mapping': saml.role_mapping if saml else {},
+            'requested_authn_context': saml_security.get('requested_authn_context', DEFAULT_REQUESTED_AUTHN_CONTEXT),
+            'requested_authn_context_comparison': saml_security.get(
+                'requested_authn_context_comparison',
+                DEFAULT_REQUESTED_AUTHN_CONTEXT_COMPARISON,
+            ),
         },
         'smtp': {
             'host': smtp.host if smtp else '',
@@ -102,9 +138,54 @@ def saml_bootstrap_info(request: Request, _: User = Depends(require_admin)):
             'email_attribute': DEFAULT_ENTRA_EMAIL_ATTRIBUTE,
             'display_name_attribute': DEFAULT_ENTRA_DISPLAY_ATTRIBUTE,
             'nameid_mapping': DEFAULT_NAMEID_FORMAT,
+            'requested_authn_context': DEFAULT_REQUESTED_AUTHN_CONTEXT,
+            'requested_authn_context_comparison': DEFAULT_REQUESTED_AUTHN_CONTEXT_COMPARISON,
             'fallback_email_attributes': list(DEFAULT_EMAIL_ATTRIBUTES),
             'fallback_display_attributes': list(DEFAULT_DISPLAY_NAME_ATTRIBUTES),
         },
+    }
+
+
+@router.post('/saml/parse-idp-metadata', dependencies=[Depends(enforce_csrf)])
+def parse_idp_metadata(payload: dict, _: User = Depends(require_admin)):
+    metadata_xml = str(payload.get('metadata_xml') or '').strip()
+    if not metadata_xml:
+        raise HTTPException(status_code=400, detail='Metadata XML boş olamaz')
+
+    required_binding = payload.get('binding')
+    if required_binding not in {'redirect', 'post'}:
+        required_binding = 'redirect'
+    saml_binding = (
+        OneLogin_Saml2_Constants.BINDING_HTTP_REDIRECT
+        if required_binding == 'redirect'
+        else OneLogin_Saml2_Constants.BINDING_HTTP_POST
+    )
+
+    try:
+        parsed = OneLogin_Saml2_IdPMetadataParser.parse(
+            metadata_xml,
+            required_sso_binding=saml_binding,
+            required_slo_binding=saml_binding,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f'Metadata parse edilemedi: {exc}') from exc
+
+    idp = parsed.get('idp') or {}
+    entity_id = idp.get('entityId') or ''
+    sso_url = ((idp.get('singleSignOnService') or {}).get('url')) or ''
+    slo_url = ((idp.get('singleLogoutService') or {}).get('url')) or ''
+    cert_raw = idp.get('x509cert') or ''
+    cert_pem = _normalize_pem_certificate(cert_raw)
+
+    if not (entity_id or sso_url or cert_pem):
+        raise HTTPException(status_code=400, detail='Metadata içinde kullanılabilir IdP bilgisi bulunamadı')
+
+    return {
+        'entity_id': entity_id,
+        'sso_url': sso_url,
+        'slo_url': slo_url,
+        'x509_certificate': cert_pem,
+        'detected_binding': 'redirect' if saml_binding == OneLogin_Saml2_Constants.BINDING_HTTP_REDIRECT else 'post',
     }
 
 
@@ -183,6 +264,16 @@ def update_saml(payload: dict, request: Request, admin: User = Depends(require_a
         except Exception:
             role_mapping = {}
     row.role_mapping = role_mapping or {}
+
+    requested_authn_context = bool(payload.get('requested_authn_context', DEFAULT_REQUESTED_AUTHN_CONTEXT))
+    requested_authn_context_comparison = str(
+        payload.get('requested_authn_context_comparison', DEFAULT_REQUESTED_AUTHN_CONTEXT_COMPARISON)
+    ).strip().lower()
+    if requested_authn_context_comparison not in ALLOWED_AUTHN_CONTEXT_COMPARISONS:
+        requested_authn_context_comparison = DEFAULT_REQUESTED_AUTHN_CONTEXT_COMPARISON
+    _set_app_setting(db, SAML_REQUESTED_AUTHN_CONTEXT_KEY, 'true' if requested_authn_context else 'false')
+    _set_app_setting(db, SAML_REQUESTED_AUTHN_CONTEXT_COMPARISON_KEY, requested_authn_context_comparison)
+
     row.updated_at = now_utc()
     db.commit()
 

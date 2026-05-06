@@ -60,6 +60,9 @@ async function loadSettings() {
   set('saml_x509_certificate',       data.saml.x509_certificate || '');
   set('saml_attribute_mapping',      JSON.stringify(data.saml.attribute_mapping || {}, null, 2));
   set('saml_role_mapping',           JSON.stringify(data.saml.role_mapping || {}, null, 2));
+  chk('saml_requested_authn_context', data.saml.requested_authn_context);
+  set('saml_requested_authn_context_comparison', data.saml.requested_authn_context_comparison || 'exact');
+  updateSamlRequestedAuthnContextUI();
   await fillSamlBootstrap(true);
 
   /* SMTP */
@@ -206,6 +209,16 @@ async function fillSamlBootstrap(silent = false) {
     setIfEmptyOrLegacy('saml_email_attribute', recommended.email_attribute, ['email', 'mail', 'emailaddress']);
     setIfEmptyOrLegacy('saml_display_name_attribute', recommended.display_name_attribute, ['displayName', 'name']);
     setIfEmptyOrLegacy('saml_nameid_mapping', recommended.nameid_mapping, []);
+    const requestedAuthnEl = document.getElementById('saml_requested_authn_context');
+    if (requestedAuthnEl && requestedAuthnEl.dataset.userSet !== '1') {
+      requestedAuthnEl.checked = !!recommended.requested_authn_context;
+    }
+    setIfEmptyOrLegacy(
+      'saml_requested_authn_context_comparison',
+      recommended.requested_authn_context_comparison || 'exact',
+      []
+    );
+    updateSamlRequestedAuthnContextUI();
 
     const hint = document.getElementById('samlExportHint');
     if (hint && sp.base_url) {
@@ -237,6 +250,38 @@ async function downloadSamlMetadata() {
   }
 }
 
+function updateSamlRequestedAuthnContextUI() {
+  const enabled = !!document.getElementById('saml_requested_authn_context')?.checked;
+  const cmp = document.getElementById('saml_requested_authn_context_comparison');
+  if (cmp) {
+    cmp.disabled = !enabled;
+    cmp.style.opacity = enabled ? '' : '0.6';
+  }
+}
+
+async function parseIdpMetadata() {
+  const xml = (document.getElementById('saml_idp_metadata_xml')?.value || '').trim();
+  const binding = (document.getElementById('saml_idp_metadata_binding')?.value || 'redirect').trim();
+  if (!xml) {
+    showToast('Önce Entra metadata XML içeriğini yapıştırın', 'warn');
+    return;
+  }
+  try {
+    const parsed = await api('/api/settings/saml/parse-idp-metadata', {
+      method: 'POST',
+      body: JSON.stringify({ metadata_xml: xml, binding }),
+    });
+    const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val ?? ''; };
+    set('saml_entity_id', parsed.entity_id || '');
+    set('saml_sso_url', parsed.sso_url || '');
+    set('saml_slo_url', parsed.slo_url || '');
+    if (parsed.x509_certificate) set('saml_x509_certificate', parsed.x509_certificate);
+    showToast('IdP metadata başarıyla içe aktarıldı', 'success');
+  } catch (e) {
+    showToast('Metadata içe aktarılamadı: ' + e.message, 'error');
+  }
+}
+
 async function saveSaml() {
   let attrMapping = {}, roleMapping = {};
   try { attrMapping = JSON.parse(document.getElementById('saml_attribute_mapping').value || '{}'); } catch { attrMapping = {}; }
@@ -253,6 +298,8 @@ async function saveSaml() {
     x509_certificate:        document.getElementById('saml_x509_certificate').value.trim(),
     attribute_mapping:       attrMapping,
     role_mapping:            roleMapping,
+    requested_authn_context: document.getElementById('saml_requested_authn_context').checked,
+    requested_authn_context_comparison: document.getElementById('saml_requested_authn_context_comparison').value.trim() || 'exact',
   };
   try {
     await api('/api/settings/saml', { method: 'PUT', body: JSON.stringify(payload) });
@@ -385,6 +432,10 @@ document.addEventListener('DOMContentLoaded', () => {
   loadReportModulesSettings();
 
   document.getElementById('smtp_relay_mode')?.addEventListener('change', updateSmtpRelayModeUI);
+  document.getElementById('saml_requested_authn_context')?.addEventListener('change', e => {
+    e.target.dataset.userSet = '1';
+    updateSamlRequestedAuthnContextUI();
+  });
 
   /* Timezone clock updater */
   setInterval(() => {

@@ -166,11 +166,12 @@
       <div class="form-hint" style="margin-top:4px">Pasif olduğunda login ekranında Microsoft Entra ID butonu görünmez</div>
     </div>
     <div style="max-width:700px">
-      <div class="field" style="margin-bottom:14px">
-        <label>1) Uygulama (SP) Bilgileri — Otomatik</label>
+      <h4 class="saml-step-title">1) Uygulama (SP) Bilgileri</h4>
+      <div class="saml-step-divider">----------------------------------</div>
+      <div class="field" style="margin-bottom:12px">
         <div class="toolbar" style="margin:8px 0 10px 0">
           <button class="btn" onclick="fillSamlBootstrap()">⚙ Uygulama Bilgilerini Doldur</button>
-          <button class="btn" onclick="downloadSamlMetadata()">⬇ metadata.xml İndir</button>
+          <button class="btn" onclick="downloadSamlMetadata()">⬇ metadata.xml Dışa Aktar</button>
         </div>
         <div class="form-hint" id="samlExportHint">
           Bu alanlar sunucunun mevcut adresinden otomatik üretilir ve Entra ID tarafında SP tanımı için kullanılır.
@@ -194,9 +195,26 @@
           <label>SP SLO URL (Read-only)</label>
           <input id="saml_sp_sls_url" readonly />
         </div>
+      </div>
 
+      <h4 class="saml-step-title">2) IdP (Entra ID) Bilgileri</h4>
+      <div class="saml-step-divider">----------------------------------</div>
+      <div class="field">
+        <label>Entra ID Metadata XML (Import)</label>
+        <textarea id="saml_idp_metadata_xml" placeholder="Entra ID Federation Metadata XML içeriğini buraya yapıştırın" style="min-height:120px;font-family:monospace;font-size:12px"></textarea>
+        <div class="field-inline" style="margin-top:8px;gap:8px;flex-wrap:wrap">
+          <select id="saml_idp_metadata_binding" style="max-width:210px">
+            <option value="redirect">Endpoint Binding: HTTP-Redirect</option>
+            <option value="post">Endpoint Binding: HTTP-POST</option>
+          </select>
+          <button class="btn" onclick="parseIdpMetadata()">📥 Metadata'yı İçe Aktar</button>
+        </div>
+        <div class="form-hint">İçe aktarma: IdP Entity ID, SSO URL, SLO URL ve X.509 sertifikasını otomatik doldurur.</div>
+      </div>
+
+      <div class="form-grid">
         <div class="field col-span-2">
-          <label>2) IdP Entity ID (Microsoft Entra Issuer)</label>
+          <label>IdP Entity ID (Microsoft Entra Issuer)</label>
           <input id="saml_entity_id" placeholder="https://sts.windows.net/TENANT_GUID/" />
           <div class="form-hint">Entra ID tarafındaki <strong>Identifier (Entity ID / Issuer)</strong> değeri</div>
         </div>
@@ -208,9 +226,37 @@
           <label>IdP SLO URL (Logout URL)</label>
           <input id="saml_slo_url" placeholder="https://login.microsoftonline.com/TENANT_ID/saml2" />
         </div>
+        <div class="field col-span-2">
+          <label>X.509 Sertifikası (IdP Public Certificate)</label>
+          <textarea id="saml_x509_certificate" placeholder="-----BEGIN CERTIFICATE-----&#10;MIICpDCCAYwCCQD...&#10;-----END CERTIFICATE-----" style="min-height:100px;font-family:monospace;font-size:12px"></textarea>
+          <div class="form-hint">Boş bırakılırsa mevcut sertifika korunur</div>
+        </div>
+        <div class="field col-span-2">
+          <label>RequestedAuthnContext Gönder</label>
+          <label class="checkbox-label">
+            <input type="checkbox" id="saml_requested_authn_context" />
+            AuthnRequest içinde RequestedAuthnContext gönder
+          </label>
+          <div class="form-hint">
+            AADSTS75011 hatası için önerilen: bu alanı kapalı bırak (RequestedAuthnContext gönderme).
+          </div>
+        </div>
+        <div class="field col-span-2">
+          <label>RequestedAuthnContext Comparison</label>
+          <select id="saml_requested_authn_context_comparison" style="max-width:260px">
+            <option value="exact">exact</option>
+            <option value="minimum">minimum</option>
+            <option value="better">better</option>
+            <option value="maximum">maximum</option>
+          </select>
+        </div>
+      </div>
 
+      <h4 class="saml-step-title">3) E----------------------------------</h4>
+      <div class="saml-step-divider">----------------------------------</div>
+      <div class="form-grid">
         <div class="field">
-          <label>3) E-posta Attribute</label>
+          <label>E-posta Attribute</label>
           <input id="saml_email_attribute" placeholder="http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress" />
           <div class="form-hint">Önerilen (Entra): <code>http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress</code></div>
         </div>
@@ -223,11 +269,6 @@
           <label>NameID Mapping</label>
           <input id="saml_nameid_mapping" placeholder="urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress" />
           <div class="form-hint">Önerilen: <code>urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress</code></div>
-        </div>
-        <div class="field col-span-2">
-          <label>X.509 Sertifikası (IdP Public Certificate)</label>
-          <textarea id="saml_x509_certificate" placeholder="-----BEGIN CERTIFICATE-----&#10;MIICpDCCAYwCCQD...&#10;-----END CERTIFICATE-----" style="min-height:100px;font-family:monospace;font-size:12px"></textarea>
-          <div class="form-hint">Boş bırakılırsa mevcut sertifika korunur</div>
         </div>
         <div class="field col-span-2">
           <label>Attribute Mapping (JSON)</label>
