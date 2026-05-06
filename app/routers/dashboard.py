@@ -11,16 +11,27 @@ from app.models import Contract, ContractType, Institution, Notification, User
 router = APIRouter()
 
 
+def _coerce_int(value: str | None) -> int | None:
+    if value is None or value == '':
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 @router.get('/summary')
 def dashboard_summary(
     q: str | None = None,
-    institution_id: int | None = None,
+    institution_id: str | None = None,
     status: str | None = None,
     critical_level: str | None = None,
-    expiring_days: int | None = None,
+    expiring_days: str | None = None,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    institution_id = _coerce_int(institution_id)
+    expiring_days = _coerce_int(expiring_days)
     today = date.today()
     in_7  = today + timedelta(days=7)
     in_30 = today + timedelta(days=30)

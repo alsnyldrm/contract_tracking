@@ -66,16 +66,25 @@ def _serialize_contract(c: Contract, institution_name: str | None = None, tags: 
     }
 
 
+def _coerce_int(value: str | None) -> int | None:
+    if value is None or value == '':
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 @router.get('/')
 def list_contracts(
     q: str | None = None,
-    institution_id: int | None = None,
-    contract_type_id: int | None = None,
+    institution_id: str | None = None,
+    contract_type_id: str | None = None,
     status: str | None = None,
     critical_level: str | None = None,
     responsible: str | None = None,
     tag: str | None = None,
-    expiring_days: int | None = None,
+    expiring_days: str | None = None,
     start_date: str | None = None,
     end_date: str | None = None,
     sort_by: str = 'updated_at',
@@ -85,6 +94,10 @@ def list_contracts(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    institution_id_i = _coerce_int(institution_id)
+    contract_type_id_i = _coerce_int(contract_type_id)
+    expiring_days_i = _coerce_int(expiring_days)
+
     if sort_by not in SAFE_SORT_COLUMNS:
         sort_by = 'updated_at'
 
@@ -103,10 +116,10 @@ def list_contracts(
                 Contract.responsible_person_name.ilike(f'%{q}%'),
             )
         )
-    if institution_id:
-        query = query.filter(Contract.institution_id == institution_id)
-    if contract_type_id:
-        query = query.filter(Contract.contract_type_id == contract_type_id)
+    if institution_id_i is not None:
+        query = query.filter(Contract.institution_id == institution_id_i)
+    if contract_type_id_i is not None:
+        query = query.filter(Contract.contract_type_id == contract_type_id_i)
     if status:
         query = query.filter(Contract.status == status)
     if critical_level:
@@ -117,9 +130,9 @@ def list_contracts(
         query = query.filter(Contract.start_date >= start_date)
     if end_date:
         query = query.filter(Contract.end_date <= end_date)
-    if expiring_days:
+    if expiring_days_i is not None:
         today = date.today()
-        target = date.fromordinal(today.toordinal() + int(expiring_days))
+        target = date.fromordinal(today.toordinal() + expiring_days_i)
         query = query.filter(Contract.end_date <= target, Contract.end_date >= today)
     if tag:
         query = (
