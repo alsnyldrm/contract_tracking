@@ -3,8 +3,10 @@ import logging
 import smtplib
 from email.message import EmailMessage
 from email.utils import formataddr
+from urllib.parse import urlparse
+from urllib.request import Request as UrlRequest, urlopen
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from onelogin.saml2.constants import OneLogin_Saml2_Constants
 from onelogin.saml2.idp_metadata_parser import OneLogin_Saml2_IdPMetadataParser
 from sqlalchemy.orm import Session
@@ -146,13 +148,47 @@ def saml_bootstrap_info(request: Request, _: User = Depends(require_admin)):
     }
 
 
-@router.post('/saml/parse-idp-metadata', dependencies=[Depends(enforce_csrf)])
-def parse_idp_metadata(payload: dict, _: User = Depends(require_admin)):
-    metadata_xml = str(payload.get('metadata_xml') or '').strip()
-    if not metadata_xml:
-        raise HTTPException(status_code=400, detail='Metadata XML boş olamaz')
+def _fetch_metadata_xml_from_url(metadata_url: str) -> str:
+    parsed_url = urlparse(metadata_url)
+    if parsed_url.scheme not in {'http', 'https'}:
+        raise HTTPException(status_code=400, detail='Metadata URL sadece http/https olabilir')
+    try:
+        request = UrlRequest(metadata_url, headers={'User-Agent': 'contract-tracking/1.0'})
+        with urlopen(request, timeout=12) as response:
+            raw = response.read(2 * 1024 * 1024)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f'Metadata URL okunamadı: {exc}') from exc
+    if not raw:
+        raise HTTPException(status_code=400, detail='Metadata URL boş içerik döndürdü')
+    try:
+        return raw.decode('utf-8-sig')
+    except UnicodeDecodeError:
+        return raw.decode('latin-1')
 
-    required_binding = payload.get('binding')
+
+@router.post('/saml/import-idp-metadata', dependencies=[Depends(enforce_csrf)])
+async def import_idp_metadata(
+    metadata_url: str = Form(default=''),
+    binding: str = Form(default='redirect'),
+    metadata_file: UploadFile | None = File(default=None),
+    _: User = Depends(require_admin),
+):
+    metadata_xml = ''
+    if metadata_file and metadata_file.filename:
+        file_bytes = await metadata_file.read()
+        if not file_bytes:
+            raise HTTPException(status_code=400, detail='Yüklenen metadata dosyası boş')
+        try:
+            metadata_xml = file_bytes.decode('utf-8-sig')
+        except UnicodeDecodeError:
+            metadata_xml = file_bytes.decode('latin-1')
+    else:
+        metadata_url = str(metadata_url or '').strip()
+        if not metadata_url:
+            raise HTTPException(status_code=400, detail='Metadata XML dosyası yükleyin veya metadata URL girin')
+        metadata_xml = _fetch_metadata_xml_from_url(metadata_url)
+
+    required_binding = binding
     if required_binding not in {'redirect', 'post'}:
         required_binding = 'redirect'
     saml_binding = (

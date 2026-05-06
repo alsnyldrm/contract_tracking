@@ -604,14 +604,16 @@ html[data-theme='dark'] .alert-warning { background: #4e1d09; color: #fec84b; bo
   color: var(--text);
 }
 .saml-step-divider {
+  width: 100%;
+  height: 0;
   border-top: 3px solid var(--border);
-  color: var(--muted);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 11px;
-  letter-spacing: .03em;
-  padding-top: 5px;
-  margin-bottom: 12px;
-  user-select: none;
+  margin: 0 0 12px 0;
+}
+
+.saml-binding-select {
+  min-width: 260px;
+  max-width: 320px;
+  padding-right: 34px;
 }
 
 /* ── Chart containers ── */

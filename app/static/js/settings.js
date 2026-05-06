@@ -209,10 +209,6 @@ async function fillSamlBootstrap(silent = false) {
     setIfEmptyOrLegacy('saml_email_attribute', recommended.email_attribute, ['email', 'mail', 'emailaddress']);
     setIfEmptyOrLegacy('saml_display_name_attribute', recommended.display_name_attribute, ['displayName', 'name']);
     setIfEmptyOrLegacy('saml_nameid_mapping', recommended.nameid_mapping, []);
-    const requestedAuthnEl = document.getElementById('saml_requested_authn_context');
-    if (requestedAuthnEl && requestedAuthnEl.dataset.userSet !== '1') {
-      requestedAuthnEl.checked = !!recommended.requested_authn_context;
-    }
     setIfEmptyOrLegacy(
       'saml_requested_authn_context_comparison',
       recommended.requested_authn_context_comparison || 'exact',
@@ -260,16 +256,22 @@ function updateSamlRequestedAuthnContextUI() {
 }
 
 async function parseIdpMetadata() {
-  const xml = (document.getElementById('saml_idp_metadata_xml')?.value || '').trim();
+  const fileEl = document.getElementById('saml_idp_metadata_file');
+  const file = fileEl?.files?.[0] || null;
+  const metadataUrl = (document.getElementById('saml_idp_metadata_url')?.value || '').trim();
   const binding = (document.getElementById('saml_idp_metadata_binding')?.value || 'redirect').trim();
-  if (!xml) {
-    showToast('Önce Entra metadata XML içeriğini yapıştırın', 'warn');
+  if (!file && !metadataUrl) {
+    showToast('Metadata XML dosyası seçin veya metadata URL girin', 'warn');
     return;
   }
   try {
-    const parsed = await api('/api/settings/saml/parse-idp-metadata', {
+    const form = new FormData();
+    form.append('binding', binding);
+    if (file) form.append('metadata_file', file);
+    if (metadataUrl) form.append('metadata_url', metadataUrl);
+    const parsed = await api('/api/settings/saml/import-idp-metadata', {
       method: 'POST',
-      body: JSON.stringify({ metadata_xml: xml, binding }),
+      body: form,
     });
     const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val ?? ''; };
     set('saml_entity_id', parsed.entity_id || '');

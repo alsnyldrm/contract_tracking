@@ -167,7 +167,7 @@
     </div>
     <div style="max-width:700px">
       <h4 class="saml-step-title">1) Uygulama (SP) Bilgileri</h4>
-      <div class="saml-step-divider">----------------------------------</div>
+      <div class="saml-step-divider"></div>
       <div class="field" style="margin-bottom:12px">
         <div class="toolbar" style="margin:8px 0 10px 0">
           <button class="btn" onclick="fillSamlBootstrap()">⚙ Uygulama Bilgilerini Doldur</button>
@@ -198,12 +198,15 @@
       </div>
 
       <h4 class="saml-step-title">2) IdP (Entra ID) Bilgileri</h4>
-      <div class="saml-step-divider">----------------------------------</div>
+      <div class="saml-step-divider"></div>
       <div class="field">
-        <label>Entra ID Metadata XML (Import)</label>
-        <textarea id="saml_idp_metadata_xml" placeholder="Entra ID Federation Metadata XML içeriğini buraya yapıştırın" style="min-height:120px;font-family:monospace;font-size:12px"></textarea>
+        <label>Entra ID Metadata Kaynağı</label>
+        <input type="file" id="saml_idp_metadata_file" accept=".xml,application/xml,text/xml" />
+        <div class="form-hint">Seçenek 1: Entra'dan indirdiğiniz metadata XML dosyasını yükleyin.</div>
+        <input id="saml_idp_metadata_url" placeholder="https://login.microsoftonline.com/.../federationmetadata.xml" style="margin-top:8px" />
+        <div class="form-hint">Seçenek 2: Metadata URL girin, sistem URL'den çekip alanları doldursun.</div>
         <div class="field-inline" style="margin-top:8px;gap:8px;flex-wrap:wrap">
-          <select id="saml_idp_metadata_binding" style="max-width:210px">
+          <select id="saml_idp_metadata_binding" class="saml-binding-select">
             <option value="redirect">Endpoint Binding: HTTP-Redirect</option>
             <option value="post">Endpoint Binding: HTTP-POST</option>
           </select>
@@ -252,8 +255,8 @@
         </div>
       </div>
 
-      <h4 class="saml-step-title">3) E----------------------------------</h4>
-      <div class="saml-step-divider">----------------------------------</div>
+      <h4 class="saml-step-title">3) Claim ve Eşleme Ayarları</h4>
+      <div class="saml-step-divider"></div>
       <div class="form-grid">
         <div class="field">
           <label>E-posta Attribute</label>
