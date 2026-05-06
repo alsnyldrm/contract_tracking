@@ -248,6 +248,7 @@ label { font-size: 13px; font-weight: 500; display: block; margin-bottom: 4px; c
   text-transform: uppercase; letter-spacing: .04em;
   padding: 10px 10px; border-bottom: 2px solid var(--border);
   white-space: nowrap; background: var(--panel);
+  text-align: left;
   position: sticky; top: 0;
 }
 .table th.sortable { cursor: pointer; user-select: none; }
@@ -255,7 +256,7 @@ label { font-size: 13px; font-weight: 500; display: block; margin-bottom: 4px; c
 .table th .sort-icon { margin-left: 4px; opacity: .4; }
 .table th.sort-asc .sort-icon::after { content: ' ↑'; opacity: 1; }
 .table th.sort-desc .sort-icon::after { content: ' ↓'; opacity: 1; }
-.table td { border-bottom: 1px solid var(--border); padding: 9px 10px; vertical-align: middle; }
+.table td { border-bottom: 1px solid var(--border); padding: 9px 10px; vertical-align: middle; text-align: left; }
 .table tbody tr:hover { background: rgba(0,0,0,.022); }
 html[data-theme='dark'] .table tbody tr:hover { background: rgba(255,255,255,.04); }
 .table-actions { display: flex; gap: 5px; flex-wrap: nowrap; }
