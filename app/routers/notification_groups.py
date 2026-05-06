@@ -1,11 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.deps import enforce_csrf, get_current_user, require_admin
 from app.core.security import now_utc
-from app.models import Contract, NotificationGroup, NotificationGroupMember, User
+from app.models import Contract, NotificationGroup, NotificationGroupMember, Role, User
 from app.services.audit_service import add_audit_log
+from app.services.ldap_service import search_ldap_users
 
 router = APIRouter()
 
@@ -26,6 +28,47 @@ def _normalize_user_ids(raw_user_ids) -> list[int]:
     return out
 
 
+def _normalize_members(raw_members) -> list[dict]:
+    if raw_members is None:
+        return []
+    if not isinstance(raw_members, list):
+        raise HTTPException(status_code=400, detail='AD kullanıcı listesi geçersiz')
+
+    out: list[dict] = []
+    seen: set[str] = set()
+
+    for item in raw_members:
+        if not isinstance(item, dict):
+            continue
+        member_id = item.get('id')
+        try:
+            member_id = int(member_id) if member_id not in (None, '') else None
+        except (TypeError, ValueError):
+            member_id = None
+
+        username = (item.get('username') or '').strip()
+        email = (item.get('email') or '').strip().lower() or None
+        full_name = (item.get('full_name') or item.get('display_name') or '').strip() or None
+
+        if not username and not email and not member_id:
+            continue
+
+        key = str(member_id) if member_id else (f'u:{username.lower()}' if username else f'e:{email}')
+        if key in seen:
+            continue
+        seen.add(key)
+
+        out.append(
+            {
+                'id': member_id,
+                'username': username,
+                'email': email,
+                'full_name': full_name,
+            }
+        )
+    return out
+
+
 def _load_active_users(db: Session, user_ids: list[int]) -> list[User]:
     if not user_ids:
         return []
@@ -37,6 +80,92 @@ def _load_active_users(db: Session, user_ids: list[int]) -> list[User]:
     if len(users) != len(user_ids):
         raise HTTPException(status_code=400, detail='Seçilen kullanıcıların bir kısmı geçersiz veya pasif')
     return users
+
+
+def _sanitize_username(value: str) -> str:
+    cleaned = ''.join(ch for ch in value if ch.isalnum() or ch in '._-').strip('._-')
+    return cleaned or 'ldap.user'
+
+
+def _build_unique_username(db: Session, preferred_username: str | None, email: str | None) -> str:
+    base = (preferred_username or '').strip()
+    if not base and email:
+        base = email.split('@', 1)[0]
+    base = _sanitize_username(base or 'ldap.user')
+
+    candidate = base
+    idx = 1
+    while db.query(User).filter(func.lower(User.username) == candidate.lower()).first():
+        idx += 1
+        candidate = f'{base}.{idx}'
+    return candidate
+
+
+def _get_readonly_role_id(db: Session) -> int:
+    role = db.query(Role).filter(Role.name == 'readonly').first()
+    if not role:
+        raise HTTPException(status_code=500, detail='readonly rolü bulunamadı')
+    return role.id
+
+
+def _resolve_member_user_ids(db: Session, members: list[dict]) -> list[int]:
+    if not members:
+        return []
+
+    role_id = _get_readonly_role_id(db)
+    ts = now_utc()
+    user_ids: list[int] = []
+
+    for member in members:
+        member_id = member.get('id')
+        username = (member.get('username') or '').strip()
+        email = (member.get('email') or '').strip().lower() or None
+        full_name = (member.get('full_name') or '').strip() or None
+
+        row = None
+        if member_id:
+            row = db.query(User).filter(User.id == member_id).first()
+
+        if not row and username:
+            row = db.query(User).filter(func.lower(User.username) == username.lower()).first()
+
+        if not row and email:
+            row = db.query(User).filter(func.lower(User.email) == email.lower()).first()
+
+        if not row:
+            row = User(
+                username=_build_unique_username(db, username, email),
+                password_hash=None,
+                email=email,
+                full_name=full_name or username or (email.split('@', 1)[0] if email else 'LDAP Kullanıcı'),
+                auth_source='ldap',
+                must_change_password=False,
+                is_active=True,
+                role_id=role_id,
+                created_at=ts,
+                updated_at=ts,
+                is_deleted=False,
+                deleted_at=None,
+            )
+            db.add(row)
+            db.flush()
+        else:
+            if row.is_deleted:
+                row.is_deleted = False
+                row.deleted_at = None
+            row.is_active = True
+            if full_name and row.auth_source == 'ldap':
+                row.full_name = full_name
+            if email and row.email != email and row.auth_source == 'ldap':
+                conflict = db.query(User).filter(User.id != row.id, func.lower(User.email) == email.lower()).first()
+                if not conflict:
+                    row.email = email
+            row.updated_at = ts
+
+        if row.id not in user_ids:
+            user_ids.append(row.id)
+
+    return user_ids
 
 
 @router.get('/users')
@@ -57,6 +186,47 @@ def list_users_for_groups(_: User = Depends(require_admin), db: Session = Depend
         }
         for r in rows
     ]
+
+
+@router.get('/ad-search')
+def ad_search_users(
+    request: Request,
+    q: str = Query(..., min_length=2),
+    _: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    request_meta = {
+        'request_id': getattr(request.state, 'request_id', None),
+        'ip_address': request.client.host if request.client else None,
+        'user_agent': request.headers.get('user-agent'),
+    }
+
+    rows = search_ldap_users(db, q, request_meta)
+    out: list[dict] = []
+
+    for row in rows:
+        username = (row.get('username') or '').strip()
+        email = (row.get('email') or '').strip().lower() or None
+
+        existing = None
+        if username:
+            existing = db.query(User).filter(func.lower(User.username) == username.lower()).first()
+        if not existing and email:
+            existing = db.query(User).filter(func.lower(User.email) == email.lower()).first()
+
+        out.append(
+            {
+                'id': existing.id if existing else None,
+                'username': username,
+                'full_name': (row.get('full_name') or row.get('display_name') or '').strip(),
+                'email': email,
+                'department': row.get('department') or '',
+                'title': row.get('title') or '',
+                'auth_source': 'ldap',
+            }
+        )
+
+    return out
 
 
 @router.get('/options')
@@ -97,19 +267,20 @@ def list_groups(_: User = Depends(require_admin), db: Session = Depends(get_db))
     members_map: dict[int, list[dict]] = {}
     if group_ids:
         member_rows = (
-            db.query(NotificationGroupMember.group_id, User.id, User.username, User.full_name, User.email)
+            db.query(NotificationGroupMember.group_id, User.id, User.username, User.full_name, User.email, User.auth_source)
             .join(User, User.id == NotificationGroupMember.user_id)
             .filter(NotificationGroupMember.group_id.in_(group_ids), User.is_deleted.is_(False), User.is_active.is_(True))
             .order_by(User.full_name.asc())
             .all()
         )
-        for group_id, uid, username, full_name, email in member_rows:
+        for group_id, uid, username, full_name, email, auth_source in member_rows:
             members_map.setdefault(group_id, []).append(
                 {
                     'id': uid,
                     'username': username,
                     'full_name': full_name,
                     'email': email,
+                    'auth_source': auth_source,
                 }
             )
 
@@ -138,7 +309,8 @@ def create_group(
     name = (payload.get('name') or '').strip()
     description = (payload.get('description') or '').strip() or None
     is_active = bool(payload.get('is_active', True))
-    user_ids = _normalize_user_ids(payload.get('user_ids'))
+    members = _normalize_members(payload.get('members'))
+    user_ids = _normalize_user_ids(payload.get('user_ids')) if not members else _resolve_member_user_ids(db, members)
 
     if not name:
         raise HTTPException(status_code=400, detail='Grup adı zorunludur')
@@ -147,7 +319,14 @@ def create_group(
     if exists:
         raise HTTPException(status_code=409, detail='Bu grup adı zaten kullanılıyor')
 
-    _load_active_users(db, user_ids)
+    if members:
+        if not user_ids:
+            raise HTTPException(status_code=400, detail='AD üzerinde seçilen kullanıcılar eklenemedi')
+    else:
+        _load_active_users(db, user_ids)
+
+    if not user_ids:
+        raise HTTPException(status_code=400, detail='En az bir kullanıcı seçmelisiniz')
 
     ts = now_utc()
     row = NotificationGroup(
@@ -218,9 +397,18 @@ def update_group(
         row.is_active = bool(payload.get('is_active'))
 
     member_count = None
-    if 'user_ids' in payload:
-        user_ids = _normalize_user_ids(payload.get('user_ids'))
-        _load_active_users(db, user_ids)
+    if 'members' in payload or 'user_ids' in payload:
+        members = _normalize_members(payload.get('members')) if 'members' in payload else []
+        user_ids = _normalize_user_ids(payload.get('user_ids')) if not members else _resolve_member_user_ids(db, members)
+
+        if members:
+            if not user_ids:
+                raise HTTPException(status_code=400, detail='AD üzerinde seçilen kullanıcılar eklenemedi')
+        else:
+            _load_active_users(db, user_ids)
+
+        if not user_ids:
+            raise HTTPException(status_code=400, detail='En az bir kullanıcı seçmelisiniz')
 
         db.query(NotificationGroupMember).filter(NotificationGroupMember.group_id == row.id).delete()
         ts = now_utc()

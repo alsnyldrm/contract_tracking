@@ -64,8 +64,8 @@
 
     <div class="modal-section-title">Bildirim Alacak Kullanıcılar</div>
     <div class="field">
-      <input id="ngUserSearchInput" placeholder="Kullanıcı adı / ad soyad / e-posta ara..." oninput="renderNotificationGroupUserOptions()" />
-      <div class="form-hint">E-posta adresi olmayan kullanıcılar mail alamaz.</div>
+      <input id="ngUserSearchInput" placeholder="Kullanıcı adı / ad soyad / e-posta ara..." oninput="handleNotificationGroupMemberSearch()" />
+      <div class="form-hint">Kullanıcılar AD üzerinden aranır. E-posta adresi olmayan kullanıcılar mail alamaz.</div>
     </div>
     <div id="ngUserOptions" style="max-height:280px;overflow:auto;border:1px solid var(--border);border-radius:8px;padding:8px"></div>
 

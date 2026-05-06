@@ -1,7 +1,40 @@
 let notificationGroupRows = [];
-let notificationUsers = [];
 let ngEditId = null;
-let ngSelectedUserIds = new Set();
+let ngSelectedMembers = new Map();
+let ngSearchResults = [];
+let ngSearchTimer = null;
+let ngCandidateList = [];
+
+function memberIdentityKey(member) {
+  if (member?.id) return `id:${member.id}`;
+  if (member?.username) return `u:${String(member.username).toLowerCase()}`;
+  if (member?.email) return `e:${String(member.email).toLowerCase()}`;
+  return null;
+}
+
+function normalizeMember(member) {
+  return {
+    id: member?.id ? Number(member.id) : null,
+    username: (member?.username || '').trim(),
+    full_name: (member?.full_name || member?.display_name || '').trim(),
+    email: ((member?.email || '').trim().toLowerCase()) || null,
+    department: (member?.department || '').trim(),
+    title: (member?.title || '').trim(),
+    auth_source: member?.auth_source || 'ldap',
+  };
+}
+
+function addSelectedMember(member) {
+  const normalized = normalizeMember(member);
+  const key = memberIdentityKey(normalized);
+  if (!key) return;
+  ngSelectedMembers.set(key, { ...normalized, _key: key });
+}
+
+function setSelectedMembers(members) {
+  ngSelectedMembers = new Map();
+  (members || []).forEach(m => addSelectedMember(m));
+}
 
 async function loadNotificationGroups() {
   const tbody = document.getElementById('ngTbody');
@@ -13,10 +46,6 @@ async function loadNotificationGroups() {
   } catch (e) {
     tbody.innerHTML = `<tr><td colspan="7" class="td-muted" style="text-align:center;padding:24px">${escHtml(e.message)}</td></tr>`;
   }
-}
-
-async function loadNotificationUsers() {
-  notificationUsers = await api('/api/notification-groups/users');
 }
 
 function renderNotificationGroups(rows) {
@@ -73,7 +102,8 @@ function clearNotificationGroupForm() {
   document.getElementById('ng_description').value = '';
   document.getElementById('ng_is_active').checked = true;
   document.getElementById('ngUserSearchInput').value = '';
-  ngSelectedUserIds = new Set();
+  setSelectedMembers([]);
+  ngSearchResults = [];
   renderNotificationGroupUserOptions();
 }
 
@@ -88,7 +118,7 @@ function openNotificationGroupModal(groupId = null) {
       document.getElementById('ng_name').value = row.name || '';
       document.getElementById('ng_description').value = row.description || '';
       document.getElementById('ng_is_active').checked = !!row.is_active;
-      ngSelectedUserIds = new Set((row.members || []).map(m => m.id));
+      setSelectedMembers(row.members || []);
       renderNotificationGroupUserOptions();
     }
   }
@@ -101,39 +131,97 @@ function closeNotificationGroupModal() {
   ngEditId = null;
 }
 
+async function handleNotificationGroupMemberSearch() {
+  const q = (document.getElementById('ngUserSearchInput').value || '').trim();
+  clearTimeout(ngSearchTimer);
+
+  if (q.length < 2) {
+    ngSearchResults = [];
+    renderNotificationGroupUserOptions();
+    return;
+  }
+
+  ngSearchTimer = setTimeout(async () => {
+    const container = document.getElementById('ngUserOptions');
+    if (container) container.innerHTML = '<div class="td-muted" style="padding:8px 6px;text-align:center">AD üzerinde aranıyor…</div>';
+
+    try {
+      ngSearchResults = await api(`/api/notification-groups/ad-search?q=${encodeURIComponent(q)}`);
+      renderNotificationGroupUserOptions();
+    } catch (e) {
+      ngSearchResults = [];
+      renderNotificationGroupUserOptions();
+      showToast('AD araması başarısız: ' + e.message, 'warn');
+    }
+  }, 300);
+}
+
 function renderNotificationGroupUserOptions() {
   const container = document.getElementById('ngUserOptions');
   const q = (document.getElementById('ngUserSearchInput').value || '').toLowerCase().trim();
   if (!container) return;
 
-  const filtered = notificationUsers.filter(u => {
-    const text = `${u.username} ${u.full_name} ${u.email || ''}`.toLowerCase();
-    return !q || text.includes(q);
+  const mergedMap = new Map();
+  ngSelectedMembers.forEach((value, key) => mergedMap.set(key, value));
+  (ngSearchResults || []).forEach(item => {
+    const normalized = normalizeMember(item);
+    const key = memberIdentityKey(normalized);
+    if (!key) return;
+    if (!mergedMap.has(key)) {
+      mergedMap.set(key, { ...normalized, _key: key });
+    }
   });
 
-  if (filtered.length === 0) {
-    container.innerHTML = '<div class="td-muted" style="padding:8px 6px;text-align:center">Kullanıcı bulunamadı</div>';
+  let candidates = Array.from(mergedMap.values());
+  if (q) {
+    candidates = candidates.filter(u => {
+      const text = `${u.username || ''} ${u.full_name || ''} ${u.email || ''}`.toLowerCase();
+      return text.includes(q);
+    });
+  }
+
+  candidates.sort((a, b) => {
+    const aName = (a.full_name || a.username || '').toLowerCase();
+    const bName = (b.full_name || b.username || '').toLowerCase();
+    return aName.localeCompare(bName, 'tr');
+  });
+
+  ngCandidateList = candidates;
+
+  if (candidates.length === 0) {
+    if (q.length < 2) {
+      container.innerHTML = '<div class="td-muted" style="padding:8px 6px;text-align:center">AD kullanıcı araması için en az 2 karakter yazın</div>';
+    } else {
+      container.innerHTML = '<div class="td-muted" style="padding:8px 6px;text-align:center">AD üzerinde kullanıcı bulunamadı</div>';
+    }
     return;
   }
 
-  container.innerHTML = filtered.map(u => {
-    const checked = ngSelectedUserIds.has(u.id) ? 'checked' : '';
+  container.innerHTML = candidates.map((u, idx) => {
+    const checked = ngSelectedMembers.has(u._key) ? 'checked' : '';
+    const badge = (u.auth_source || '').toLowerCase() === 'ldap' ? '<span class="badge badge-yellow" style="margin-left:6px">AD</span>' : '';
+    const line2 = [u.username, u.department, u.title, u.email || 'e-posta yok'].filter(Boolean).join(' · ');
     return `
       <label class="checkbox-label" style="display:flex;justify-content:space-between;border-bottom:1px solid var(--border);padding:8px 4px">
         <span style="display:flex;align-items:center;gap:8px;min-width:0">
-          <input type="checkbox" ${checked} onchange="toggleNotificationGroupUser(${u.id}, this.checked)" />
+          <input type="checkbox" ${checked} onchange="toggleNotificationGroupMember(${idx}, this.checked)" />
           <span style="min-width:0">
-            <div style="font-weight:600;line-height:1.2">${escHtml(u.full_name || u.username)}</div>
-            <div class="td-muted" style="font-size:11.5px;line-height:1.2">${escHtml(u.username)}${u.email ? ' · ' + escHtml(u.email) : ' · e-posta yok'}</div>
+            <div style="font-weight:600;line-height:1.2">${escHtml(u.full_name || u.username || u.email || 'AD Kullanıcı')} ${badge}</div>
+            <div class="td-muted" style="font-size:11.5px;line-height:1.2">${escHtml(line2)}</div>
           </span>
         </span>
       </label>`;
   }).join('');
 }
 
-function toggleNotificationGroupUser(userId, checked) {
-  if (checked) ngSelectedUserIds.add(userId);
-  else ngSelectedUserIds.delete(userId);
+function toggleNotificationGroupMember(index, checked) {
+  const item = ngCandidateList[index];
+  if (!item) return;
+  const key = item._key || memberIdentityKey(item);
+  if (!key) return;
+
+  if (checked) ngSelectedMembers.set(key, { ...item, _key: key });
+  else ngSelectedMembers.delete(key);
 }
 
 async function saveNotificationGroup() {
@@ -145,7 +233,12 @@ async function saveNotificationGroup() {
     name: document.getElementById('ng_name').value.trim(),
     description: document.getElementById('ng_description').value.trim() || null,
     is_active: document.getElementById('ng_is_active').checked,
-    user_ids: Array.from(ngSelectedUserIds),
+    members: Array.from(ngSelectedMembers.values()).map(m => ({
+      id: m.id || null,
+      username: m.username || '',
+      full_name: m.full_name || '',
+      email: m.email || null,
+    })),
   };
 
   if (!payload.name) {
@@ -155,8 +248,8 @@ async function saveNotificationGroup() {
     return;
   }
 
-  if (payload.user_ids.length === 0) {
-    showToast('En az bir kullanıcı seçmelisiniz', 'error');
+  if (payload.members.length === 0) {
+    showToast('En az bir AD kullanıcısı seçmelisiniz', 'error');
     btn.disabled = false;
     btn.textContent = 'Kaydet';
     return;
@@ -199,8 +292,8 @@ async function deleteNotificationGroup(groupId) {
 
 document.addEventListener('DOMContentLoaded', async () => {
   try {
-    await loadNotificationUsers();
     await loadNotificationGroups();
+    renderNotificationGroupUserOptions();
   } catch (e) {
     showToast(e.message, 'error');
   }
