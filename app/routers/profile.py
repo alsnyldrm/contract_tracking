@@ -1,6 +1,7 @@
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -83,6 +84,32 @@ def update_fullname(payload: dict, request: Request, user: User = Depends(get_cu
     user.updated_at = now_utc()
     db.commit()
     _log('profile', 'Ad Soyad güncellendi', 'fullname_update', user, request)
+    return {'ok': True}
+
+
+@router.put('/account', dependencies=[Depends(enforce_csrf)])
+def update_account(payload: dict, request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    full_name = (payload.get('full_name') or '').strip()
+    if not full_name:
+        raise HTTPException(status_code=400, detail='Ad Soyad boş olamaz')
+    if len(full_name) > 255:
+        raise HTTPException(status_code=400, detail='Ad Soyad çok uzun (maks. 255 karakter)')
+
+    email = (payload.get('email') or '').strip() or None
+    if email:
+        exists = (
+            db.query(User)
+            .filter(User.id != user.id, User.is_deleted.is_(False), func.lower(User.email) == email.lower())
+            .first()
+        )
+        if exists:
+            raise HTTPException(status_code=409, detail='Bu e-posta zaten kayıtlı')
+
+    user.full_name = full_name
+    user.email = email
+    user.updated_at = now_utc()
+    db.commit()
+    _log('profile', 'Hesap bilgileri güncellendi', 'account_update', user, request)
     return {'ok': True}
 
 

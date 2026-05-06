@@ -91,6 +91,33 @@
   </div>
 </div>
 
+<!-- Kullanıcı düzenleme modal -->
+<div class="modal" id="editUserModal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>Kullanıcı Düzenle</h3>
+      <button class="modal-close" onclick="closeEditUserModal()">✕</button>
+    </div>
+    <div class="field">
+      <label for="eu_username">Kullanıcı Adı</label>
+      <input id="eu_username" placeholder="Kullanıcı adı" autocomplete="off" />
+      <div id="eu_username_hint" class="form-hint" style="display:none">LDAP/SAML kullanıcılarında kullanıcı adı değiştirilemez.</div>
+    </div>
+    <div class="field">
+      <label for="eu_full_name">Ad Soyad</label>
+      <input id="eu_full_name" placeholder="Ad Soyad" autocomplete="off" />
+    </div>
+    <div class="field">
+      <label for="eu_email">E-posta</label>
+      <input id="eu_email" type="email" placeholder="ornek@fbu.edu.tr" autocomplete="off" />
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeEditUserModal()">İptal</button>
+      <button class="btn btn-primary" id="editUserSaveBtn" onclick="updateUserProfile()">Kaydet</button>
+    </div>
+  </div>
+</div>
+
 <!-- Şifre sıfırlama modal -->
 <div class="modal" id="resetPwModal">
   <div class="modal-content">

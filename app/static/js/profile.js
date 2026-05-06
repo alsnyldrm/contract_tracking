@@ -1,5 +1,5 @@
 let profileData = null;
-let editNameOpen = false;
+let accountEditOpen = false;
 
 function switchTab(tabId, btn) {
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
@@ -70,21 +70,27 @@ async function loadProfile() {
 
   // Ad güncelleme input
   document.getElementById('inputFullName').value = p.full_name;
+  document.getElementById('inputEmail').value = p.email || '';
 }
 
-function toggleEditName() {
-  editNameOpen = !editNameOpen;
-  document.getElementById('editNameForm').style.display = editNameOpen ? '' : 'none';
-  if (editNameOpen) document.getElementById('inputFullName').focus();
+function toggleAccountEdit() {
+  accountEditOpen = !accountEditOpen;
+  document.getElementById('editAccountForm').style.display = accountEditOpen ? '' : 'none';
+  if (accountEditOpen) document.getElementById('inputFullName').focus();
 }
 
-async function saveFullName() {
-  const name = document.getElementById('inputFullName').value.trim();
-  if (!name) { showToast('Ad Soyad boş olamaz', 'error'); return; }
+async function saveAccountInfo() {
+  const fullName = document.getElementById('inputFullName').value.trim();
+  const email = document.getElementById('inputEmail').value.trim();
+  if (!fullName) { showToast('Ad Soyad boş olamaz', 'error'); return; }
+
   try {
-    await api('/api/profile/fullname', { method: 'PUT', body: JSON.stringify({ full_name: name }) });
-    showToast('Ad Soyad güncellendi', 'success');
-    toggleEditName();
+    await api('/api/profile/account', {
+      method: 'PUT',
+      body: JSON.stringify({ full_name: fullName, email: email || null }),
+    });
+    showToast('Hesap bilgileri güncellendi', 'success');
+    toggleAccountEdit();
     await loadProfile();
   } catch (e) {
     showToast(e.message, 'error');

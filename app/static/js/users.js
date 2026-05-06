@@ -1,6 +1,7 @@
 let allUsers = [];
 let roleChangeUserId = null;
 let resetPwUserId = null;
+let editUserId = null;
 
 function authSourceLabel(src) {
   const map = { local: 'Yerel', ldap: 'LDAP / AD', saml: 'SAML / SSO' };
@@ -76,6 +77,7 @@ function renderUsers(users) {
       <td class="td-muted" style="font-size:12px">${formatDate(u.created_at)}</td>
       <td>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn btn-sm" onclick="openEditUserModal(${u.id})">Düzenle</button>
           <button class="btn btn-sm btn-secondary" onclick="openRoleModal(${u.id}, '${escHtml(u.username)}', '${u.role}')">Rol</button>
           ${u.auth_source === 'local' ? `<button class="btn btn-sm" onclick="openResetPwModal(${u.id}, '${escHtml(u.username)}')">Şifre</button>` : ''}
           <button class="btn btn-sm" onclick="toggleActive(${u.id}, ${!u.is_active})">${u.is_active ? 'Pasifleştir' : 'Aktifleştir'}</button>
@@ -84,6 +86,69 @@ function renderUsers(users) {
       </td>
     </tr>`;
   }).join('');
+}
+
+function openEditUserModal(userId) {
+  const user = allUsers.find(u => u.id === userId);
+  if (!user) {
+    showToast('Kullanıcı bulunamadı', 'error');
+    return;
+  }
+  editUserId = userId;
+  const usernameInput = document.getElementById('eu_username');
+  const usernameHint = document.getElementById('eu_username_hint');
+  const fullNameInput = document.getElementById('eu_full_name');
+  const emailInput = document.getElementById('eu_email');
+
+  usernameInput.value = user.username || '';
+  fullNameInput.value = user.full_name || '';
+  emailInput.value = user.email || '';
+
+  const lockUsername = user.auth_source !== 'local';
+  usernameInput.disabled = lockUsername;
+  usernameHint.style.display = lockUsername ? '' : 'none';
+
+  document.getElementById('editUserModal').classList.add('open');
+}
+
+function closeEditUserModal() {
+  document.getElementById('editUserModal').classList.remove('open');
+  editUserId = null;
+}
+
+async function updateUserProfile() {
+  if (!editUserId) return;
+  const btn = document.getElementById('editUserSaveBtn');
+  btn.disabled = true;
+  btn.textContent = 'Kaydediliyor…';
+  const usernameInput = document.getElementById('eu_username');
+
+  const payload = {
+    full_name: document.getElementById('eu_full_name').value.trim(),
+    email: document.getElementById('eu_email').value.trim() || null,
+  };
+  if (!usernameInput.disabled) {
+    payload.username = usernameInput.value.trim();
+  }
+
+  if (!payload.full_name) {
+    showToast('Ad Soyad boş olamaz', 'error');
+    btn.disabled = false;
+    btn.textContent = 'Kaydet';
+    return;
+  }
+
+  try {
+    await api(`/api/users/${editUserId}`, { method: 'PUT', body: JSON.stringify(payload) });
+    showToast('Kullanıcı bilgileri güncellendi', 'success');
+    closeEditUserModal();
+    await loadUsers();
+  } catch (e) {
+    showToast(e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Kaydet';
+  }
 }
 
 /* ── Role modal ── */

@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
+from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.database import get_db
@@ -77,6 +78,70 @@ def create_user(payload: dict, request: Request, admin: User = Depends(require_a
         new_values={'username': user.username, 'role': role_name, 'auth_source': 'local'},
     )
     return {'ok': True, 'id': user.id}
+
+
+@router.put('/{user_id}', dependencies=[Depends(enforce_csrf)])
+def update_user_profile(user_id: int, payload: dict, request: Request, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    target = db.query(User).filter(User.id == user_id, User.is_deleted.is_(False)).first()
+    if not target:
+        raise HTTPException(status_code=404, detail='Kullanıcı bulunamadı')
+
+    prev = {
+        'username': target.username,
+        'full_name': target.full_name,
+        'email': target.email,
+    }
+
+    if 'full_name' in payload:
+        full_name = (payload.get('full_name') or '').strip()
+        if not full_name:
+            raise HTTPException(status_code=400, detail='Ad Soyad boş olamaz')
+        if len(full_name) > 255:
+            raise HTTPException(status_code=400, detail='Ad Soyad çok uzun (maks. 255 karakter)')
+        target.full_name = full_name
+
+    if 'email' in payload:
+        email = (payload.get('email') or '').strip() or None
+        if email:
+            exists = (
+                db.query(User)
+                .filter(User.id != target.id, User.is_deleted.is_(False), func.lower(User.email) == email.lower())
+                .first()
+            )
+            if exists:
+                raise HTTPException(status_code=409, detail='Bu e-posta zaten kayıtlı')
+        target.email = email
+
+    if 'username' in payload:
+        username = (payload.get('username') or '').strip()
+        if target.auth_source != 'local':
+            raise HTTPException(status_code=400, detail='LDAP/SAML kullanıcılarında kullanıcı adı değiştirilemez')
+        if not username:
+            raise HTTPException(status_code=400, detail='Kullanıcı adı boş olamaz')
+        exists = (
+            db.query(User)
+            .filter(User.id != target.id, User.is_deleted.is_(False), func.lower(User.username) == username.lower())
+            .first()
+        )
+        if exists:
+            raise HTTPException(status_code=409, detail='Bu kullanıcı adı zaten kullanılıyor')
+        target.username = username
+
+    target.updated_at = now_utc()
+    db.commit()
+
+    add_audit_log(
+        db,
+        table_name='users',
+        record_id=str(target.id),
+        action='profile_update',
+        user=admin,
+        ip_address=request.client.host if request.client else None,
+        request_id=getattr(request.state, 'request_id', None),
+        previous_values=prev,
+        new_values={'username': target.username, 'full_name': target.full_name, 'email': target.email},
+    )
+    return {'ok': True}
 
 
 @router.put('/{user_id}/active', dependencies=[Depends(enforce_csrf)])

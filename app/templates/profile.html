@@ -27,18 +27,24 @@
   <div class="panel">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
       <h3 style="margin:0">Hesap Bilgileri</h3>
-      <button class="btn btn-sm btn-secondary" onclick="toggleEditName()">Ad Güncelle</button>
+      <button class="btn btn-sm btn-secondary" onclick="toggleAccountEdit()">Bilgi Güncelle</button>
     </div>
 
-    <!-- Ad güncelleme formu (gizli) -->
-    <div id="editNameForm" style="display:none;margin-bottom:14px;background:var(--bg);border-radius:8px;padding:12px;border:1px solid var(--border)">
-      <div class="field">
-        <label for="inputFullName">Ad Soyad</label>
-        <input id="inputFullName" type="text" placeholder="Ad Soyad" style="max-width:320px" />
+    <!-- Hesap bilgileri güncelleme formu (gizli) -->
+    <div id="editAccountForm" style="display:none;margin-bottom:14px;background:var(--bg);border-radius:8px;padding:12px;border:1px solid var(--border)">
+      <div class="form-grid">
+        <div class="field">
+          <label for="inputFullName">Ad Soyad</label>
+          <input id="inputFullName" type="text" placeholder="Ad Soyad" />
+        </div>
+        <div class="field">
+          <label for="inputEmail">E-posta</label>
+          <input id="inputEmail" type="email" placeholder="ornek@fbu.edu.tr" />
+        </div>
       </div>
       <div style="display:flex;gap:8px">
-        <button class="btn btn-primary btn-sm" onclick="saveFullName()">Kaydet</button>
-        <button class="btn btn-sm" onclick="toggleEditName()">İptal</button>
+        <button class="btn btn-primary btn-sm" onclick="saveAccountInfo()">Kaydet</button>
+        <button class="btn btn-sm" onclick="toggleAccountEdit()">İptal</button>
       </div>
     </div>
 
