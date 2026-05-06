@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 from urllib.parse import urlparse
 
 from fastapi import Request
@@ -10,6 +11,27 @@ from sqlalchemy.orm import Session
 from app.core.logging_config import log_event
 from app.core.security import now_utc
 from app.models import Role, SamlSetting, User
+
+
+DEFAULT_EMAIL_ATTRIBUTES = (
+    'email',
+    'mail',
+    'emailaddress',
+    'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress',
+    'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/upn',
+    'urn:oid:0.9.2342.19200300.100.1.3',
+)
+
+DEFAULT_DISPLAY_NAME_ATTRIBUTES = (
+    'displayName',
+    'displayname',
+    'name',
+    'cn',
+    'http://schemas.microsoft.com/identity/claims/displayname',
+    'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name',
+)
+
+EMAIL_PATTERN = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
 
 
 def get_saml_setting(db: Session) -> SamlSetting | None:
@@ -80,6 +102,54 @@ def get_metadata(db: Session, request: Request) -> str:
     return metadata
 
 
+def _first_attr_value(value: object) -> str | None:
+    if isinstance(value, (list, tuple)):
+        for item in value:
+            if item is None:
+                continue
+            text = str(item).strip()
+            if text:
+                return text
+        return None
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
+def _get_attr_case_insensitive(attrs: dict, key: str | None) -> str | None:
+    if not key:
+        return None
+    raw = attrs.get(key)
+    if raw is not None:
+        return _first_attr_value(raw)
+    wanted = key.casefold()
+    for attr_key, attr_value in attrs.items():
+        if str(attr_key).casefold() == wanted:
+            return _first_attr_value(attr_value)
+    return None
+
+
+def _find_attr_value(attr_sources: list[dict], candidates: list[str | None]) -> str | None:
+    for candidate in candidates:
+        if not candidate:
+            continue
+        for source in attr_sources:
+            value = _get_attr_case_insensitive(source, candidate)
+            if value:
+                return value
+    return None
+
+
+def _as_mapping_value(mapping: dict, *keys: str) -> str | None:
+    for key in keys:
+        raw = mapping.get(key)
+        value = _first_attr_value(raw)
+        if value:
+            return value
+    return None
+
+
 def process_acs(db: Session, request: Request, post_data: dict) -> User:
     setting = get_saml_setting(db)
     if not setting or not setting.enabled:
@@ -96,16 +166,32 @@ def process_acs(db: Session, request: Request, post_data: dict) -> User:
         raise ValueError('SAML kimlik doğrulama başarısız')
 
     attrs = auth.get_attributes() or {}
+    get_friendly_attrs = getattr(auth, 'get_friendlyname_attributes', None)
+    friendly_attrs = get_friendly_attrs() if callable(get_friendly_attrs) else {}
     nameid = auth.get_nameid()
 
-    email_attr = setting.email_attribute or 'email'
-    display_attr = setting.display_name_attribute or 'displayName'
-    email = (attrs.get(email_attr) or [None])[0]
-    display_name = (attrs.get(display_attr) or [nameid])[0] or nameid
+    configured_mapping = setting.attribute_mapping if isinstance(setting.attribute_mapping, dict) else {}
+    email_from_mapping = _as_mapping_value(configured_mapping, 'email', 'mail', 'email_attribute')
+    display_from_mapping = _as_mapping_value(
+        configured_mapping,
+        'display_name',
+        'displayName',
+        'name',
+        'full_name',
+    )
+
+    email_candidates = [setting.email_attribute, email_from_mapping, *DEFAULT_EMAIL_ATTRIBUTES]
+    display_candidates = [setting.display_name_attribute, display_from_mapping, *DEFAULT_DISPLAY_NAME_ATTRIBUTES]
+    attr_sources = [attrs, friendly_attrs]
+
+    email = _find_attr_value(attr_sources, email_candidates)
+    display_name = _find_attr_value(attr_sources, display_candidates) or nameid
 
     username = nameid or email
     if not username:
         raise ValueError('SAML kullanıcısı için NameID bulunamadı')
+    if not email and username and EMAIL_PATTERN.match(username):
+        email = username
 
     user = db.query(User).filter(User.username == username, User.is_deleted.is_(False)).first()
     if not user:
@@ -127,6 +213,24 @@ def process_acs(db: Session, request: Request, post_data: dict) -> User:
         db.add(user)
         db.commit()
         db.refresh(user)
+    else:
+        changed = False
+        if display_name and user.full_name != display_name:
+            user.full_name = display_name
+            changed = True
+        if email and user.email != email:
+            email_owner = (
+                db.query(User)
+                .filter(User.email == email, User.id != user.id, User.is_deleted.is_(False))
+                .first()
+            )
+            if not email_owner:
+                user.email = email
+                changed = True
+        if changed:
+            user.updated_at = now_utc()
+            db.commit()
+            db.refresh(user)
 
     log_event(
         'saml',
