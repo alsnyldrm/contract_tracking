@@ -304,11 +304,11 @@ async function responsibleSearch(val) {
       }
       dropdown.innerHTML = results.map((r, i) => `
         <div class="autocomplete-item" onclick="selectResponsible(${i})" data-index="${i}"
-             data-name="${escHtml(r.display_name || r.name || '')}"
+             data-name="${escHtml(r.display_name || r.full_name || r.name || '')}"
              data-email="${escHtml(r.email || '')}"
              data-username="${escHtml(r.username || r.samaccountname || '')}"
              data-dept="${escHtml(r.department || '')}">
-          <div class="ac-name">${escHtml(r.display_name || r.name || r.username)}</div>
+          <div class="ac-name">${escHtml(r.display_name || r.full_name || r.name || r.username)}</div>
           <div class="ac-sub">${escHtml([r.title, r.department, r.email].filter(Boolean).join(' · '))}</div>
         </div>`).join('');
     } catch {

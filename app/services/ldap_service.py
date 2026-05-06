@@ -98,9 +98,11 @@ def search_ldap_users(db: Session, query: str, request_meta: dict) -> list[dict]
 
             users = []
             for entry in conn.entries:
+                full_name = str(entry.displayName.value or '') if 'displayName' in entry else ''
                 users.append(
                     {
-                        'full_name': str(entry.displayName.value or '') if 'displayName' in entry else '',
+                        'full_name': full_name,
+                        'display_name': full_name,
                         'email': str(entry.mail.value or '') if 'mail' in entry else '',
                         'username': str(entry.sAMAccountName.value or '') if 'sAMAccountName' in entry else '',
                         'department': str(entry.department.value or '') if 'department' in entry else '',
