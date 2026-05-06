@@ -1,6 +1,7 @@
 /* ── State ── */
 let contractRows   = [];
 let contractEditId = null;
+let contractCloneSignature = null;
 let currentDocContractId = null;
 let sortField      = 'updated_at';
 let sortDir        = 'desc';
@@ -192,6 +193,77 @@ function initContractColumnChooser() {
   applyContractColumnVisibility();
 }
 
+function normalizeContractPayloadForCompare(payload) {
+  const normText = v => {
+    if (v === null || v === undefined) return null;
+    const s = String(v).trim();
+    return s || null;
+  };
+  const normRequiredText = v => normText(v) || '';
+  const normInt = v => (v === null || v === undefined || v === '') ? null : Number(v);
+  const normNum = v => (v === null || v === undefined || v === '') ? null : Number(v);
+  const normBool = v => !!v;
+  const normTags = tags => [...new Set((tags || []).map(t => String(t).trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'tr'));
+
+  return {
+    contract_number: normRequiredText(payload.contract_number),
+    contract_name: normRequiredText(payload.contract_name),
+    institution_id: normInt(payload.institution_id),
+    contract_type_id: normInt(payload.contract_type_id),
+    start_date: normText(payload.start_date),
+    end_date: normText(payload.end_date),
+    signed_date: normText(payload.signed_date),
+    renewal_date: normText(payload.renewal_date),
+    amount: normNum(payload.amount),
+    currency_id: normInt(payload.currency_id),
+    vat_included: normBool(payload.vat_included),
+    payment_period: normText(payload.payment_period),
+    notification_group_id: normInt(payload.notification_group_id),
+    status: normRequiredText(payload.status),
+    critical_level: normRequiredText(payload.critical_level),
+    reminder_days: normInt(payload.reminder_days),
+    auto_renewal: normBool(payload.auto_renewal),
+    termination_notice_days: normInt(payload.termination_notice_days),
+    responsible_person_name: normText(payload.responsible_person_name),
+    responsible_person_email: normText(payload.responsible_person_email),
+    responsible_person_username: normText(payload.responsible_person_username),
+    responsible_department: normText(payload.responsible_department),
+    description: normText(payload.description),
+    internal_notes: normText(payload.internal_notes),
+    tags: normTags(payload.tags),
+  };
+}
+
+function buildContractPayloadFromForm() {
+  return {
+    contract_number:          document.getElementById('c_contract_number').value.trim(),
+    contract_name:            document.getElementById('c_contract_name').value.trim(),
+    institution_id:           Number(document.getElementById('c_institution_id').value) || null,
+    contract_type_id:         Number(document.getElementById('c_contract_type_id').value) || null,
+    start_date:               document.getElementById('c_start_date').value || null,
+    end_date:                 document.getElementById('c_end_date').value || null,
+    signed_date:              document.getElementById('c_signed_date').value || null,
+    renewal_date:             document.getElementById('c_renewal_date').value || null,
+    amount:                   document.getElementById('c_amount').value ? Number(document.getElementById('c_amount').value) : null,
+    currency_id:              Number(document.getElementById('c_currency_id').value) || null,
+    vat_included:             document.getElementById('c_vat_included').checked,
+    payment_period:           document.getElementById('c_payment_period').value || null,
+    notification_group_id:    Number(document.getElementById('c_notification_group_id').value) || null,
+    status:                   document.getElementById('c_status').value,
+    critical_level:           document.getElementById('c_critical_level').value,
+    reminder_days:            Number(document.getElementById('c_reminder_days').value) || 30,
+    auto_renewal:             document.getElementById('c_auto_renewal').checked,
+    termination_notice_days:  document.getElementById('c_termination_notice_days').value ? Number(document.getElementById('c_termination_notice_days').value) : null,
+    responsible_person_name:  document.getElementById('c_responsible_person_name').value.trim() || null,
+    responsible_person_email: document.getElementById('c_responsible_person_email').value.trim() || null,
+    responsible_person_username: document.getElementById('c_responsible_person_username').value.trim() || null,
+    responsible_department:   document.getElementById('c_responsible_department').value.trim() || null,
+    description:              document.getElementById('c_description').value.trim() || null,
+    internal_notes:           document.getElementById('c_internal_notes').value.trim() || null,
+    tags:                     document.getElementById('c_tags').value.split(',').map(t => t.trim()).filter(Boolean),
+  };
+}
+
 /* ── Load data ── */
 async function loadContracts() {
   const params = new URLSearchParams({
@@ -273,6 +345,7 @@ async function loadContracts() {
         <div class="table-actions">
           <button class="btn btn-sm" onclick="openDocModal(${c.id}, '${escHtml(c.contract_name).replace(/'/g, "\\'")}')">📎</button>
           ${isAdmin ? `
+          <button class="btn btn-sm" onclick="cloneContract(${c.id})" title="Çoğalt">⧉</button>
           <button class="btn btn-sm btn-secondary" onclick="openContractModal(${c.id})">✏</button>
           <button class="btn btn-sm btn-danger" onclick="deleteContract(${c.id})">🗑</button>` : ''}
         </div>
@@ -320,6 +393,7 @@ function goPage(p) {
 /* ── Modal ── */
 async function openContractModal(id = null) {
   contractEditId = id;
+  contractCloneSignature = null;
   document.getElementById('contractModalTitle').textContent = id ? 'Sözleşme Düzenle' : 'Yeni Sözleşme';
   clearContractForm();
 
@@ -336,9 +410,58 @@ async function openContractModal(id = null) {
   document.getElementById('contractModal').classList.add('open');
 }
 
+async function cloneContract(id) {
+  contractEditId = null;
+  contractCloneSignature = null;
+  clearContractForm();
+  document.getElementById('contractModalTitle').textContent = 'Sözleşme Çoğalt';
+
+  let source = contractRows.find(x => x.id === id);
+  if (!source) {
+    try {
+      source = await api(`/api/contracts/${id}`);
+    } catch (e) {
+      showToast(e.message, 'error');
+      return;
+    }
+  }
+
+  fillContractForm(source);
+  contractCloneSignature = normalizeContractPayloadForCompare({
+    contract_number: source.contract_number,
+    contract_name: source.contract_name,
+    institution_id: source.institution_id,
+    contract_type_id: source.contract_type_id,
+    start_date: source.start_date,
+    end_date: source.end_date,
+    signed_date: source.signed_date,
+    renewal_date: source.renewal_date,
+    amount: source.amount,
+    currency_id: source.currency_id,
+    vat_included: source.vat_included,
+    payment_period: source.payment_period,
+    notification_group_id: source.notification_group_id,
+    status: source.status,
+    critical_level: source.critical_level,
+    reminder_days: source.reminder_days,
+    auto_renewal: source.auto_renewal,
+    termination_notice_days: source.termination_notice_days,
+    responsible_person_name: source.responsible_person_name,
+    responsible_person_email: source.responsible_person_email,
+    responsible_person_username: source.responsible_person_username,
+    responsible_department: source.responsible_department,
+    description: source.description,
+    internal_notes: source.internal_notes,
+    tags: source.tags || [],
+  });
+
+  document.getElementById('contractModal').classList.add('open');
+}
+
 function closeContractModal() {
   document.getElementById('contractModal').classList.remove('open');
   contractEditId = null;
+  contractCloneSignature = null;
 }
 
 function clearContractForm() {
@@ -393,33 +516,16 @@ async function saveContract() {
   btn.disabled = true;
   btn.textContent = 'Kaydediliyor…';
 
-  const payload = {
-    contract_number:          document.getElementById('c_contract_number').value.trim(),
-    contract_name:            document.getElementById('c_contract_name').value.trim(),
-    institution_id:           Number(document.getElementById('c_institution_id').value) || null,
-    contract_type_id:         Number(document.getElementById('c_contract_type_id').value) || null,
-    start_date:               document.getElementById('c_start_date').value || null,
-    end_date:                 document.getElementById('c_end_date').value || null,
-    signed_date:              document.getElementById('c_signed_date').value || null,
-    renewal_date:             document.getElementById('c_renewal_date').value || null,
-    amount:                   document.getElementById('c_amount').value ? Number(document.getElementById('c_amount').value) : null,
-    currency_id:              Number(document.getElementById('c_currency_id').value) || null,
-    vat_included:             document.getElementById('c_vat_included').checked,
-    payment_period:           document.getElementById('c_payment_period').value || null,
-    notification_group_id:    Number(document.getElementById('c_notification_group_id').value) || null,
-    status:                   document.getElementById('c_status').value,
-    critical_level:           document.getElementById('c_critical_level').value,
-    reminder_days:            Number(document.getElementById('c_reminder_days').value) || 30,
-    auto_renewal:             document.getElementById('c_auto_renewal').checked,
-    termination_notice_days:  document.getElementById('c_termination_notice_days').value ? Number(document.getElementById('c_termination_notice_days').value) : null,
-    responsible_person_name:  document.getElementById('c_responsible_person_name').value.trim() || null,
-    responsible_person_email: document.getElementById('c_responsible_person_email').value.trim() || null,
-    responsible_person_username: document.getElementById('c_responsible_person_username').value.trim() || null,
-    responsible_department:   document.getElementById('c_responsible_department').value.trim() || null,
-    description:              document.getElementById('c_description').value.trim() || null,
-    internal_notes:           document.getElementById('c_internal_notes').value.trim() || null,
-    tags:                     document.getElementById('c_tags').value.split(',').map(t => t.trim()).filter(Boolean),
-  };
+  const payload = buildContractPayloadFromForm();
+  if (!contractEditId && contractCloneSignature) {
+    const currentSignature = normalizeContractPayloadForCompare(payload);
+    if (JSON.stringify(currentSignature) === JSON.stringify(contractCloneSignature)) {
+      showToast('Bire bir aynı sözleşme zaten var. Kaydetmeden önce en az bir alanı değiştirin.', 'warn');
+      btn.disabled = false;
+      btn.textContent = 'Kaydet';
+      return;
+    }
+  }
 
   try {
     if (contractEditId) {
