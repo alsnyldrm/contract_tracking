@@ -17,7 +17,7 @@ def list_users(_: User = Depends(require_admin), db: Session = Depends(get_db)):
     rows = (
         db.query(User)
         .options(joinedload(User.role))
-        .filter(User.is_deleted.is_(False))
+        .filter(User.is_deleted.is_(False), User.auth_source != 'ldap')
         .order_by(User.created_at.desc())
         .all()
     )

@@ -4,7 +4,7 @@ let resetPwUserId = null;
 let editUserId = null;
 
 function authSourceLabel(src) {
-  const map = { local: 'Yerel', ldap: 'LDAP / AD', saml: 'SAML / SSO' };
+  const map = { local: 'Yerel', saml: 'SAML / SSO' };
   return map[src] || src;
 }
 
@@ -47,8 +47,6 @@ function renderUsers(users) {
 
     const sourceBadge = u.auth_source === 'saml'
       ? '<span class="badge badge-purple">SAML / SSO</span>'
-      : u.auth_source === 'ldap'
-      ? '<span class="badge badge-yellow">LDAP / AD</span>'
       : '<span class="badge badge-blue">Yerel</span>';
 
     const activeBadge = u.is_active

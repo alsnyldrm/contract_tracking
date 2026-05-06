@@ -17,7 +17,6 @@
         <option value="">Tüm Kaynaklar</option>
         <option value="local">Yerel</option>
         <option value="saml">SAML</option>
-        <option value="ldap">LDAP</option>
       </select>
       <button class="btn btn-primary btn-sm" onclick="openUserModal()">+ Yeni Kullanıcı</button>
     </div>
@@ -47,8 +46,7 @@
     <div class="alert alert-info">
       <span>ℹ</span>
       <span>
-        SAML/Microsoft Entra ID ile giriş yapan kullanıcılar otomatik olarak <strong>readonly</strong> rolüyle oluşturulur.
-        Burada rollerini değiştirebilirsiniz.
+        Bu listede sadece sistem kullanıcıları gösterilir. AD/LDAP sadece bildirim grubu için personel bilgisi aramasında kullanılır; giriş ve kullanıcı oluşturma amacıyla kullanılmaz.
       </span>
     </div>
   </div>

@@ -229,16 +229,30 @@ async function saveNotificationGroup() {
   btn.disabled = true;
   btn.textContent = 'Kaydediliyor…';
 
+  const selectedMembers = Array.from(ngSelectedMembers.values());
+  const internalUserIds = Array.from(
+    new Set(
+      selectedMembers
+        .filter(m => Number.isInteger(m.id) && m.id > 0 && (m.auth_source || '').toLowerCase() !== 'ldap')
+        .map(m => Number(m.id))
+    )
+  );
+  const externalMembers = selectedMembers
+    .filter(m => !(Number.isInteger(m.id) && m.id > 0 && (m.auth_source || '').toLowerCase() !== 'ldap'))
+    .map(m => ({
+      id: null,
+      username: m.username || '',
+      full_name: m.full_name || '',
+      email: m.email || null,
+      auth_source: 'ldap',
+    }));
+
   const payload = {
     name: document.getElementById('ng_name').value.trim(),
     description: document.getElementById('ng_description').value.trim() || null,
     is_active: document.getElementById('ng_is_active').checked,
-    members: Array.from(ngSelectedMembers.values()).map(m => ({
-      id: m.id || null,
-      username: m.username || '',
-      full_name: m.full_name || '',
-      email: m.email || null,
-    })),
+    user_ids: internalUserIds,
+    members: externalMembers,
   };
 
   if (!payload.name) {
@@ -248,8 +262,8 @@ async function saveNotificationGroup() {
     return;
   }
 
-  if (payload.members.length === 0) {
-    showToast('En az bir AD kullanıcısı seçmelisiniz', 'error');
+  if (payload.members.length === 0 && payload.user_ids.length === 0) {
+    showToast('En az bir kullanıcı seçmelisiniz', 'error');
     btn.disabled = false;
     btn.textContent = 'Kaydet';
     return;

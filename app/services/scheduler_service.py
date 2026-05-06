@@ -12,7 +12,17 @@ from app.core.config import get_settings
 from app.core.database import SessionLocal
 from app.core.logging_config import log_event
 from app.core.security import now_utc
-from app.models import Contract, Institution, LogSetting, Notification, NotificationGroup, NotificationGroupMember, SmtpSetting, User
+from app.models import (
+    Contract,
+    Institution,
+    LogSetting,
+    Notification,
+    NotificationGroup,
+    NotificationGroupExternalMember,
+    NotificationGroupMember,
+    SmtpSetting,
+    User,
+)
 
 settings = get_settings()
 scheduler = BackgroundScheduler(timezone=settings.timezone_default)
@@ -59,10 +69,27 @@ def _send_expiry_mail_to_group(db: Session, contract: Contract, today: date) -> 
             User.is_deleted.is_(False),
             User.is_active.is_(True),
             User.email.isnot(None),
+            User.auth_source != 'ldap',
         )
         .all()
     )
-    emails = sorted({(r.email or '').strip() for r in recipients if (r.email or '').strip()})
+
+    external_recipients = (
+        db.query(NotificationGroupExternalMember.email)
+        .filter(
+            NotificationGroupExternalMember.group_id == group.id,
+            NotificationGroupExternalMember.email.isnot(None),
+        )
+        .all()
+    )
+
+    emails = sorted(
+        {
+            (r.email or '').strip()
+            for r in recipients + external_recipients
+            if (r.email or '').strip()
+        }
+    )
     if not emails:
         log_event(
             'notification',

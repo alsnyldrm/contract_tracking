@@ -145,6 +145,19 @@ class NotificationGroupMember(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
+class NotificationGroupExternalMember(Base):
+    __tablename__ = 'notification_group_external_members'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    group_id: Mapped[int] = mapped_column(ForeignKey('notification_groups.id'), nullable=False)
+    source: Mapped[str] = mapped_column(String(30), nullable=False, default='ldap')
+    username: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
+    full_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
 class Contract(Base, TimestampMixin, SoftDeleteMixin):
     __tablename__ = 'contracts'
     __table_args__ = (UniqueConstraint('contract_number', name='uq_contract_number'),)
