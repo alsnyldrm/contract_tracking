@@ -12,12 +12,21 @@ function setupTabs() {
 }
 
 /* ── Load all settings ── */
+async function fetchSettingsWithRetry() {
+  try {
+    return await api('/api/settings');
+  } catch (e) {
+    await new Promise(r => setTimeout(r, 800));
+    return await api('/api/settings');
+  }
+}
+
 async function loadSettings() {
   let data;
   try {
-    data = await api('/api/settings');
+    data = await fetchSettingsWithRetry();
   } catch (e) {
-    showToast('Ayarlar yüklenemedi: ' + e.message, 'error');
+    showToast('Ayarlar yüklenemedi: ' + e.message + ' (Mevcut değerler korunuyor)', 'error');
     return;
   }
 

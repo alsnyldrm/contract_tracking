@@ -188,16 +188,12 @@ document.addEventListener('DOMContentLoaded', () => {
   applyChartDefaults();
 
   const shell     = document.getElementById('appShell');
-  const toggleBtn = document.getElementById('toggleSidebar');
   const closeBtn  = document.getElementById('sidebarCloseBtn');
   const themeBtn  = document.getElementById('toggleTheme');
   const notifBtn  = document.getElementById('notifBtn');
 
-  if (toggleBtn) {
-    toggleBtn.addEventListener('click', () => setSidebarCollapsed(!shell?.classList.contains('sidebar-collapsed')));
-  }
   if (closeBtn) {
-    closeBtn.addEventListener('click', () => setSidebarCollapsed(true));
+    closeBtn.addEventListener('click', () => setSidebarCollapsed(!shell?.classList.contains('sidebar-collapsed')));
   }
 
   if (themeBtn) {

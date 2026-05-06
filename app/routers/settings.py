@@ -40,7 +40,7 @@ def get_settings_bundle(_: User = Depends(require_admin), db: Session = Depends(
             'base_dn': ldap.base_dn if ldap else '',
             'bind_dn': ldap.bind_dn if ldap else '',
             'bind_password': _masked(ldap.bind_password if ldap else ''),
-            'user_search_filter': ldap.user_search_filter if ldap else '(sAMAccountName={query})',
+            'user_search_filter': ldap.user_search_filter if ldap else '(|(sAMAccountName=*{query}*)(displayName=*{query}*)(mail=*{query}*))',
             'group_search_filter': ldap.group_search_filter if ldap else '',
             'tls_enabled': ldap.tls_enabled if ldap else True,
             'verify_cert': ldap.verify_cert if ldap else True,
