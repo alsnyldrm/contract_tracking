@@ -58,16 +58,31 @@
           <th class="sortable" onclick="sortBy('contract_name')">Sözleşme Adı <span class="sort-icon"></span></th>
           <th>Kurum</th>
           <th>Tür</th>
-          <th class="sortable" onclick="sortBy('status')">Durum <span class="sort-icon"></span></th>
-          <th class="sortable" onclick="sortBy('critical_level')">Kritik <span class="sort-icon"></span></th>
+          <th class="sortable" onclick="sortBy('start_date')">Başlangıç <span class="sort-icon"></span></th>
           <th class="sortable" onclick="sortBy('end_date')">Bitiş <span class="sort-icon"></span></th>
-          <th class="sortable" onclick="sortBy('amount')">Tutar <span class="sort-icon"></span></th>
-          <th>Sorumlu</th>
-          <th>İşlemler</th>
+          <th>İmza</th>
+          <th>Yenileme</th>
+          <th class="sortable col-right" onclick="sortBy('amount')">Tutar <span class="sort-icon"></span></th>
+          <th>Para Birimi</th>
+          <th class="col-center">KDV Dahil</th>
+          <th>Ödeme Periyodu</th>
+          <th class="sortable col-center" onclick="sortBy('status')">Durum <span class="sort-icon"></span></th>
+          <th class="sortable col-center" onclick="sortBy('critical_level')">Kritik <span class="sort-icon"></span></th>
+          <th class="col-center">Hatırlatma</th>
+          <th class="col-center">Oto. Yenileme</th>
+          <th class="col-center">Fesih Bildirim</th>
+          <th>Sorumlu Ad Soyad</th>
+          <th>Sorumlu E-posta</th>
+          <th>Sorumlu Kullanıcı</th>
+          <th>Sorumlu Departman</th>
+          <th>Etiketler</th>
+          <th>Açıklama</th>
+          <th>İç Notlar</th>
+          <th class="col-center">İşlemler</th>
         </tr>
       </thead>
       <tbody id="contractTbody">
-        <tr class="loading-row"><td colspan="10"><div class="spinner"></div></td></tr>
+        <tr class="loading-row"><td colspan="25"><div class="spinner"></div></td></tr>
       </tbody>
     </table>
   </div>

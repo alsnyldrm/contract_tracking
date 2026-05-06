@@ -11,16 +11,31 @@ let debounceTimer  = null;
 let ldapTimer      = null;
 const CONTRACT_FILTER_PREF_KEY = 'contracts_columns';
 const CONTRACT_COLUMNS = [
-  { key: 'contract_number', label: 'No', index: 1 },
-  { key: 'contract_name', label: 'Sözleşme Adı', index: 2 },
-  { key: 'institution', label: 'Kurum', index: 3 },
-  { key: 'contract_type', label: 'Tür', index: 4 },
-  { key: 'status', label: 'Durum', index: 5 },
-  { key: 'critical_level', label: 'Kritik', index: 6 },
-  { key: 'end_date', label: 'Bitiş', index: 7 },
-  { key: 'amount', label: 'Tutar', index: 8 },
-  { key: 'responsible', label: 'Sorumlu', index: 9 },
-  { key: 'actions', label: 'İşlemler', index: 10 },
+  { key: 'contract_number', label: 'No', defaultVisible: true },
+  { key: 'contract_name', label: 'Sözleşme Adı', defaultVisible: true },
+  { key: 'institution', label: 'Kurum', defaultVisible: true },
+  { key: 'contract_type', label: 'Tür', defaultVisible: true },
+  { key: 'start_date', label: 'Başlangıç Tarihi', defaultVisible: false },
+  { key: 'end_date', label: 'Bitiş Tarihi', defaultVisible: true },
+  { key: 'signed_date', label: 'İmza Tarihi', defaultVisible: false },
+  { key: 'renewal_date', label: 'Yenileme Tarihi', defaultVisible: false },
+  { key: 'amount', label: 'Tutar', defaultVisible: true },
+  { key: 'currency', label: 'Para Birimi', defaultVisible: false },
+  { key: 'vat_included', label: 'KDV Dahil', defaultVisible: false },
+  { key: 'payment_period', label: 'Ödeme Periyodu', defaultVisible: false },
+  { key: 'status', label: 'Durum', defaultVisible: true },
+  { key: 'critical_level', label: 'Kritik Seviye', defaultVisible: true },
+  { key: 'reminder_days', label: 'Hatırlatma (Gün)', defaultVisible: false },
+  { key: 'auto_renewal', label: 'Otomatik Yenileme', defaultVisible: false },
+  { key: 'termination_notice_days', label: 'Fesih Bildirim (Gün)', defaultVisible: false },
+  { key: 'responsible_person_name', label: 'Sorumlu Ad Soyad', defaultVisible: true },
+  { key: 'responsible_person_email', label: 'Sorumlu E-posta', defaultVisible: false },
+  { key: 'responsible_person_username', label: 'Sorumlu Kullanıcı Adı', defaultVisible: false },
+  { key: 'responsible_department', label: 'Sorumlu Departman', defaultVisible: false },
+  { key: 'tags', label: 'Etiketler', defaultVisible: false },
+  { key: 'description', label: 'Açıklama', defaultVisible: false },
+  { key: 'internal_notes', label: 'İç Notlar', defaultVisible: false },
+  { key: 'actions', label: 'İşlemler', defaultVisible: true },
 ];
 let contractColumnVisibility = {};
 let contractFilterPreferences = {};
@@ -68,7 +83,7 @@ function resetFilters() {
 /* ── Column visibility ── */
 function getDefaultContractColumnVisibility() {
   const visibility = {};
-  CONTRACT_COLUMNS.forEach(col => { visibility[col.key] = true; });
+  CONTRACT_COLUMNS.forEach(col => { visibility[col.key] = col.defaultVisible !== false; });
   return visibility;
 }
 
@@ -89,6 +104,10 @@ function loadContractColumnVisibility() {
   CONTRACT_COLUMNS.forEach(col => {
     if (Object.prototype.hasOwnProperty.call(parsed, col.key)) {
       visibility[col.key] = !!parsed[col.key];
+      return;
+    }
+    if (col.key === 'responsible_person_name' && Object.prototype.hasOwnProperty.call(parsed, 'responsible')) {
+      visibility[col.key] = !!parsed.responsible;
     }
   });
   return visibility;
@@ -115,9 +134,10 @@ function applyContractColumnVisibility() {
   const table = document.getElementById('contractTable');
   if (!table) return;
 
-  CONTRACT_COLUMNS.forEach(col => {
+  CONTRACT_COLUMNS.forEach((col, idx) => {
+    const colIndex = idx + 1;
     const visible = contractColumnVisibility[col.key] !== false;
-    table.querySelectorAll(`thead th:nth-child(${col.index}), tbody td:nth-child(${col.index})`).forEach(cell => {
+    table.querySelectorAll(`thead th:nth-child(${colIndex}), tbody td:nth-child(${colIndex})`).forEach(cell => {
       cell.style.display = visible ? '' : 'none';
     });
   });
@@ -185,16 +205,17 @@ async function loadContracts() {
     page:         currentPage,
     page_size:    PAGE_SIZE,
   });
+  const tableColspan = CONTRACT_COLUMNS.length;
 
   const tbody = document.getElementById('contractTbody');
-  tbody.innerHTML = '<tr class="loading-row"><td colspan="10"><div class="spinner"></div></td></tr>';
+  tbody.innerHTML = `<tr class="loading-row"><td colspan="${tableColspan}"><div class="spinner"></div></td></tr>`;
   applyContractColumnVisibility();
 
   let data;
   try {
     data = await api('/api/contracts?' + params.toString());
   } catch (e) {
-    tbody.innerHTML = `<tr><td colspan="10" class="td-muted" style="text-align:center;padding:24px">${escHtml(e.message)}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="${tableColspan}" class="td-muted" style="text-align:center;padding:24px">${escHtml(e.message)}</td></tr>`;
     applyContractColumnVisibility();
     return;
   }
@@ -204,7 +225,7 @@ async function loadContracts() {
 
   if (contractRows.length === 0) {
     tbody.innerHTML = `
-      <tr><td colspan="10">
+      <tr><td colspan="${tableColspan}">
         <div class="empty-state">
           <div class="empty-icon">📄</div>
           <p style="font-weight:600">Sözleşme bulunamadı</p>
@@ -218,21 +239,35 @@ async function loadContracts() {
 
   const isAdmin = window.CT_APP.role === 'admin';
   tbody.innerHTML = contractRows.map(c => {
-    const tags = (c.tags || []).map(t => `<span class="tag-chip">${escHtml(t)}</span>`).join('');
+    const tagsText = (c.tags || []).join(', ');
     return `<tr>
       <td class="td-nowrap" style="font-weight:600;color:var(--primary)">${escHtml(c.contract_number)}</td>
       <td>
         <div style="font-weight:500">${escHtml(c.contract_name)}</div>
-        ${tags ? `<div class="tags-container" style="margin-top:4px">${tags}</div>` : ''}
       </td>
       <td class="td-truncate" style="max-width:150px" title="${escHtml(c.institution_name || '')}">${escHtml(c.institution_name || '—')}</td>
       <td class="td-muted" style="font-size:12px">${escHtml(c.contract_type_name || '—')}</td>
-      <td>${statusBadge(c.status)}</td>
-      <td>${criticalBadge(c.critical_level)}</td>
+      <td class="td-nowrap">${formatDate(c.start_date)}</td>
       <td class="td-nowrap ${isExpiring(c.end_date) ? 'text-warning' : ''}" style="font-size:12.5px">${formatDate(c.end_date)}</td>
-      <td class="td-nowrap" style="font-size:12.5px;text-align:right">${c.amount ? escHtml(Number(c.amount).toLocaleString('tr-TR')) + ' ' + escHtml(c.currency_symbol || '') : '—'}</td>
-      <td class="td-truncate" style="max-width:130px;font-size:12.5px" title="${escHtml(c.responsible_person_name || '')}">${escHtml(c.responsible_person_name || '—')}</td>
-      <td>
+      <td class="td-nowrap">${formatDate(c.signed_date)}</td>
+      <td class="td-nowrap">${formatDate(c.renewal_date)}</td>
+      <td class="td-nowrap col-right" style="font-size:12.5px">${c.amount ? escHtml(Number(c.amount).toLocaleString('tr-TR')) + ' ' + escHtml(c.currency_symbol || '') : '—'}</td>
+      <td class="td-nowrap">${escHtml(c.currency_symbol || '—')}</td>
+      <td class="col-center">${c.vat_included ? 'Evet' : 'Hayır'}</td>
+      <td>${escHtml(c.payment_period || '—')}</td>
+      <td class="col-center">${statusBadge(c.status)}</td>
+      <td class="col-center">${criticalBadge(c.critical_level)}</td>
+      <td class="col-center">${c.reminder_days ?? '—'}</td>
+      <td class="col-center">${c.auto_renewal ? 'Evet' : 'Hayır'}</td>
+      <td class="col-center">${c.termination_notice_days ?? '—'}</td>
+      <td class="td-truncate" style="max-width:170px" title="${escHtml(c.responsible_person_name || '')}">${escHtml(c.responsible_person_name || '—')}</td>
+      <td class="td-truncate" style="max-width:170px" title="${escHtml(c.responsible_person_email || '')}">${escHtml(c.responsible_person_email || '—')}</td>
+      <td class="td-nowrap">${escHtml(c.responsible_person_username || '—')}</td>
+      <td class="td-truncate" style="max-width:170px" title="${escHtml(c.responsible_department || '')}">${escHtml(c.responsible_department || '—')}</td>
+      <td class="td-truncate" style="max-width:180px" title="${escHtml(tagsText)}">${escHtml(tagsText || '—')}</td>
+      <td class="td-truncate" style="max-width:220px" title="${escHtml(c.description || '')}">${escHtml(c.description || '—')}</td>
+      <td class="td-truncate" style="max-width:220px" title="${escHtml(c.internal_notes || '')}">${escHtml(c.internal_notes || '—')}</td>
+      <td class="col-actions">
         <div class="table-actions">
           <button class="btn btn-sm" onclick="openDocModal(${c.id}, '${escHtml(c.contract_name).replace(/'/g, "\\'")}')">📎</button>
           ${isAdmin ? `

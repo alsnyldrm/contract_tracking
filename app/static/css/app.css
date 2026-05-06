@@ -266,17 +266,11 @@ html[data-theme='dark'] .table tbody tr:hover { background: rgba(255,255,255,.04
 /* Contracts table: keep header labels aligned with body cells */
 #contractTable th,
 #contractTable td { text-align: left; }
-#contractTable th:nth-child(5),
-#contractTable td:nth-child(5),
-#contractTable th:nth-child(6),
-#contractTable td:nth-child(6),
-#contractTable th:nth-child(7),
-#contractTable td:nth-child(7),
-#contractTable th:nth-child(10),
-#contractTable td:nth-child(10) { text-align: center; }
-#contractTable th:nth-child(8),
-#contractTable td:nth-child(8) { text-align: right; }
-#contractTable td:nth-child(10) .table-actions { justify-content: center; }
+#contractTable th.col-center,
+#contractTable td.col-center { text-align: center; }
+#contractTable th.col-right,
+#contractTable td.col-right { text-align: right; }
+#contractTable td.col-actions .table-actions { justify-content: center; }
 
 /* ── Widgets ── */
 .grid { display: grid; gap: 12px; }
