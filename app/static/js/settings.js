@@ -66,6 +66,7 @@ async function loadSettings() {
   set('smtp_port',         data.smtp.port || 587);
   set('smtp_username',     data.smtp.username);
   set('smtp_password',     data.smtp.password || '');
+  set('smtp_sender_name',  data.smtp.sender_name || '');
   set('smtp_sender_email', data.smtp.sender_email);
   chk('smtp_tls_ssl',      data.smtp.tls_ssl);
   setSmtpRelayMode(!!data.smtp.relay_mode || data.smtp.auth_mode === 'relay');
@@ -208,6 +209,7 @@ async function saveSmtp() {
     relay_mode:   isRelay,
     username:     isRelay ? '' : username,
     password:     isRelay ? '' : password,
+    sender_name:  document.getElementById('smtp_sender_name').value.trim(),
     sender_email: document.getElementById('smtp_sender_email').value.trim(),
     tls_ssl:      document.getElementById('smtp_tls_ssl').checked,
   };

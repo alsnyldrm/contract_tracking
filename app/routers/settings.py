@@ -2,6 +2,7 @@ import json
 import logging
 import smtplib
 from email.message import EmailMessage
+from email.utils import formataddr
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
@@ -73,6 +74,7 @@ def get_settings_bundle(_: User = Depends(require_admin), db: Session = Depends(
             'auth_mode': _smtp_auth_mode(smtp),
             'relay_mode': _smtp_auth_mode(smtp) == 'relay',
             'tls_ssl': smtp.tls_ssl if smtp else True,
+            'sender_name': smtp.sender_name if smtp else '',
             'sender_email': smtp.sender_email if smtp else '',
         },
         'log_settings': {
@@ -182,9 +184,13 @@ def update_smtp(payload: dict, request: Request, admin: User = Depends(require_a
         row = SmtpSetting(created_at=now_utc(), updated_at=now_utc())
         db.add(row)
 
-    for field in ['host', 'port', 'tls_ssl', 'sender_email']:
+    for field in ['host', 'port', 'tls_ssl', 'sender_name', 'sender_email']:
         if field in payload:
             setattr(row, field, payload[field])
+    if isinstance(row.sender_name, str):
+        row.sender_name = row.sender_name.strip() or None
+    if isinstance(row.sender_email, str):
+        row.sender_email = row.sender_email.strip() or None
 
     relay_mode = payload.get('relay_mode')
     if relay_mode is None:
@@ -233,7 +239,7 @@ def smtp_test(payload: dict, request: Request, admin: User = Depends(require_adm
 
     msg = EmailMessage()
     msg['Subject'] = 'Contract Tracking SMTP Test'
-    msg['From'] = row.sender_email
+    msg['From'] = formataddr(((row.sender_name or '').strip(), row.sender_email))
     msg['To'] = to_email
     msg.set_content('Bu bir test e-postasıdır.')
 

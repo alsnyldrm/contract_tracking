@@ -228,6 +228,7 @@ class SmtpSetting(Base, TimestampMixin):
     username: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     password: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     tls_ssl: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    sender_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     sender_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
 
