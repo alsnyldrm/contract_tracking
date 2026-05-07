@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
 
@@ -183,6 +183,8 @@ class Contract(Base, TimestampMixin, SoftDeleteMixin):
     status: Mapped[str] = mapped_column(contract_status_enum, nullable=False, default='Taslak')
     critical_level: Mapped[str] = mapped_column(critical_level_enum, nullable=False, default='Düşük')
     reminder_days: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
+    reminder_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    last_reminder_sent_on: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     auto_renewal: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     termination_notice_days: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

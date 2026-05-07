@@ -6,6 +6,7 @@ from email.utils import formataddr
 from pathlib import Path
 
 from apscheduler.schedulers.background import BackgroundScheduler
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
@@ -131,7 +132,12 @@ def _send_expiry_mail_to_group(db: Session, contract: Contract, today: date) -> 
         institution_name = inst.name if inst else None
 
     days_left = (contract.end_date - today).days if contract.end_date else None
-    day_text = f'{days_left} gün kaldı' if days_left is not None else 'Bitiş tarihi yaklaştı'
+    if days_left is None:
+        day_text = 'Bitiş tarihi yaklaştı'
+    elif days_left < 0:
+        day_text = f'Sözleşme süresi doldu ({abs(days_left)} gün geçti)'
+    else:
+        day_text = f'{days_left} gün kaldı'
     msg = EmailMessage()
     msg['Subject'] = f'Sözleşme Bitiş Uyarısı: {contract.contract_name}'
     msg['From'] = formataddr(((smtp.sender_name or '').strip(), smtp.sender_email))
@@ -145,6 +151,8 @@ def _send_expiry_mail_to_group(db: Session, contract: Contract, today: date) -> 
                 f'Kurum: {institution_name or "-"}',
                 f'Bitiş Tarihi: {contract.end_date or "-"}',
                 f'Hatırlatma: {day_text}',
+                f'Sorumlu Ad Soyad: {contract.responsible_person_name or "-"}',
+                f'Sorumlu Departman: {contract.responsible_department or "-"}',
                 '',
                 'Bu mesaj Contract Tracking tarafından otomatik gönderilmiştir.',
             ]
@@ -186,9 +194,51 @@ def _send_expiry_mail_to_group(db: Session, contract: Contract, today: date) -> 
         return 0
 
 
+def _should_send_reminder(contract: Contract, today: date) -> bool:
+    if not contract.reminder_enabled or not contract.end_date:
+        return False
+
+    days_left = (contract.end_date - today).days
+    if days_left <= 0:
+        return True
+
+    reminder_days = max(int(contract.reminder_days or 0), 0)
+    if days_left > reminder_days:
+        return False
+    return ((reminder_days - days_left) % 5) == 0
+
+
+def _claim_reminder_slot(db: Session, contract_id: int, today: date) -> bool:
+    updated = (
+        db.query(Contract)
+        .filter(
+            Contract.id == contract_id,
+            Contract.is_deleted.is_(False),
+            Contract.reminder_enabled.is_(True),
+            or_(Contract.last_reminder_sent_on.is_(None), Contract.last_reminder_sent_on < today),
+        )
+        .update({'last_reminder_sent_on': today}, synchronize_session=False)
+    )
+    db.commit()
+    return updated == 1
+
+
+def _release_reminder_slot(db: Session, contract_id: int, today: date) -> None:
+    (
+        db.query(Contract)
+        .filter(
+            Contract.id == contract_id,
+            Contract.last_reminder_sent_on == today,
+        )
+        .update({'last_reminder_sent_on': None}, synchronize_session=False)
+    )
+    db.commit()
+
+
 def _update_contract_statuses(db: Session):
     today = date.today()
     contracts = db.query(Contract).filter(Contract.is_deleted.is_(False)).all()
+    reminder_candidates: list[int] = []
     for contract in contracts:
         old_status = contract.status
         if contract.end_date and contract.end_date < today:
@@ -209,9 +259,21 @@ def _update_contract_statuses(db: Session):
                     updated_at=now_utc(),
                 )
             )
-        if old_status != 'Yaklaşıyor' and contract.status == 'Yaklaşıyor':
-            _send_expiry_mail_to_group(db, contract, today)
+
+        if _should_send_reminder(contract, today):
+            reminder_candidates.append(contract.id)
     db.commit()
+
+    for contract_id in reminder_candidates:
+        contract = db.query(Contract).filter(Contract.id == contract_id, Contract.is_deleted.is_(False)).first()
+        if not contract:
+            continue
+        if not _claim_reminder_slot(db, contract_id, today):
+            continue
+
+        recipient_count = _send_expiry_mail_to_group(db, contract, today)
+        if recipient_count <= 0:
+            _release_reminder_slot(db, contract_id, today)
 
 
 def scheduler_job():
@@ -228,7 +290,16 @@ def scheduler_job():
 
 def start_scheduler():
     if not scheduler.running:
-        scheduler.add_job(scheduler_job, 'interval', hours=24, id='daily-contract-job', replace_existing=True)
+        scheduler.add_job(
+            scheduler_job,
+            'cron',
+            hour=11,
+            minute=0,
+            id='daily-contract-job',
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+        )
         scheduler.start()
         log_event('scheduler', logging.INFO, 'Scheduler başlatıldı', module='scheduler', action='startup')
 

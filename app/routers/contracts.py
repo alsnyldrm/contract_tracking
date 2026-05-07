@@ -64,6 +64,7 @@ def _serialize_contract(
         'status':                    c.status,
         'critical_level':            c.critical_level,
         'reminder_days':             c.reminder_days,
+        'reminder_enabled':          c.reminder_enabled,
         'auto_renewal':              c.auto_renewal,
         'termination_notice_days':   c.termination_notice_days,
         'description':               c.description,
@@ -119,6 +120,21 @@ def _normalize_optional_int(value) -> int | None:
         return None
 
 
+def _normalize_bool(value, default: bool = False) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    text = str(value).strip().lower()
+    if text in {'1', 'true', 'evet', 'yes', 'on'}:
+        return True
+    if text in {'0', 'false', 'hayır', 'hayir', 'no', 'off'}:
+        return False
+    return default
+
+
 def _normalize_optional_amount(value) -> str | None:
     if value in (None, ''):
         return None
@@ -165,6 +181,7 @@ def _build_payload_signature(payload: dict, notification_group_id: int | None) -
         'status': _normalize_required_text(payload.get('status', 'Taslak')) or 'Taslak',
         'critical_level': _normalize_required_text(payload.get('critical_level', 'Düşük')) or 'Düşük',
         'reminder_days': _normalize_optional_int(payload.get('reminder_days', 30)) or 30,
+        'reminder_enabled': _normalize_bool(payload.get('reminder_enabled'), default=True),
         'auto_renewal': bool(payload.get('auto_renewal', False)),
         'termination_notice_days': _normalize_optional_int(payload.get('termination_notice_days')),
         'description': _normalize_optional_text(payload.get('description')),
@@ -195,6 +212,7 @@ def _build_contract_signature(db: Session, contract: Contract) -> dict:
         'status': _normalize_required_text(contract.status),
         'critical_level': _normalize_required_text(contract.critical_level),
         'reminder_days': contract.reminder_days,
+        'reminder_enabled': bool(contract.reminder_enabled),
         'auto_renewal': bool(contract.auto_renewal),
         'termination_notice_days': contract.termination_notice_days,
         'description': _normalize_optional_text(contract.description),
@@ -439,6 +457,7 @@ def create_contract(
         status=signature['status'],
         critical_level=signature['critical_level'],
         reminder_days=signature['reminder_days'],
+        reminder_enabled=signature['reminder_enabled'],
         auto_renewal=signature['auto_renewal'],
         termination_notice_days=signature['termination_notice_days'],
         description=signature['description'],
@@ -487,13 +506,14 @@ def update_contract(
         'start_date', 'end_date', 'signed_date', 'renewal_date', 'amount', 'currency_id',
         'vat_included', 'payment_period', 'responsible_person_name', 'responsible_person_email',
         'responsible_person_username', 'responsible_department', 'status', 'critical_level',
-        'reminder_days', 'auto_renewal', 'termination_notice_days', 'description', 'internal_notes',
+        'reminder_days', 'reminder_enabled', 'auto_renewal', 'termination_notice_days', 'description', 'internal_notes',
     ]
     for field in editable:
         if field in payload:
             setattr(row, field, payload[field])
     row.contract_number = _normalize_required_text(row.contract_number)
     row.contract_name = _normalize_required_text(row.contract_name)
+    row.reminder_enabled = _normalize_bool(row.reminder_enabled, default=True)
     if not row.contract_number:
         raise HTTPException(status_code=400, detail='contract_number zorunludur')
     if not row.institution_id:
@@ -527,6 +547,7 @@ def update_contract(
             'status': row.status,
             'critical_level': row.critical_level,
             'reminder_days': row.reminder_days,
+            'reminder_enabled': row.reminder_enabled,
             'auto_renewal': row.auto_renewal,
             'termination_notice_days': row.termination_notice_days,
             'description': row.description,

@@ -202,7 +202,10 @@ function normalizeContractPayloadForCompare(payload) {
   const normRequiredText = v => normText(v) || '';
   const normInt = v => (v === null || v === undefined || v === '') ? null : Number(v);
   const normNum = v => (v === null || v === undefined || v === '') ? null : Number(v);
-  const normBool = v => !!v;
+  const normBool = (v, defaultValue = false) => {
+    if (v === null || v === undefined) return defaultValue;
+    return !!v;
+  };
   const normTags = tags => [...new Set((tags || []).map(t => String(t).trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'tr'));
 
   return {
@@ -222,6 +225,7 @@ function normalizeContractPayloadForCompare(payload) {
     status: normRequiredText(payload.status),
     critical_level: normRequiredText(payload.critical_level),
     reminder_days: normInt(payload.reminder_days),
+    reminder_enabled: normBool(payload.reminder_enabled, true),
     auto_renewal: normBool(payload.auto_renewal),
     termination_notice_days: normInt(payload.termination_notice_days),
     responsible_person_name: normText(payload.responsible_person_name),
@@ -252,6 +256,7 @@ function buildContractPayloadFromForm() {
     status:                   document.getElementById('c_status').value,
     critical_level:           document.getElementById('c_critical_level').value,
     reminder_days:            Number(document.getElementById('c_reminder_days').value) || 30,
+    reminder_enabled:         document.getElementById('c_reminder_enabled').checked,
     auto_renewal:             document.getElementById('c_auto_renewal').checked,
     termination_notice_days:  document.getElementById('c_termination_notice_days').value ? Number(document.getElementById('c_termination_notice_days').value) : null,
     responsible_person_name:  document.getElementById('c_responsible_person_name').value.trim() || null,
@@ -331,7 +336,7 @@ async function loadContracts() {
       <td class="td-truncate" style="max-width:180px" title="${escHtml(c.notification_group_name || '')}">${escHtml(c.notification_group_name || '—')}</td>
       <td class="col-center">${statusBadge(c.status)}</td>
       <td class="col-center">${criticalBadge(c.critical_level)}</td>
-      <td class="col-center">${c.reminder_days ?? '—'}</td>
+      <td class="col-center">${formatReminderCell(c)}</td>
       <td class="col-center">${c.auto_renewal ? 'Evet' : 'Hayır'}</td>
       <td class="col-center">${c.termination_notice_days ?? '—'}</td>
       <td class="td-truncate" style="max-width:170px" title="${escHtml(c.responsible_person_name || '')}">${escHtml(c.responsible_person_name || '—')}</td>
@@ -362,6 +367,11 @@ function isExpiring(dateStr) {
   const d = new Date(dateStr);
   const diff = (d - new Date()) / (1000 * 60 * 60 * 24);
   return diff >= 0 && diff <= 30;
+}
+
+function formatReminderCell(contract) {
+  if (contract?.reminder_enabled === false) return 'Kapalı';
+  return contract?.reminder_days ?? '—';
 }
 
 /* ── Pagination ── */
@@ -444,6 +454,7 @@ async function cloneContract(id) {
     status: source.status,
     critical_level: source.critical_level,
     reminder_days: source.reminder_days,
+    reminder_enabled: source.reminder_enabled !== false,
     auto_renewal: source.auto_renewal,
     termination_notice_days: source.termination_notice_days,
     responsible_person_name: source.responsible_person_name,
@@ -476,9 +487,11 @@ function clearContractForm() {
   document.getElementById('c_status').value       = 'Taslak';
   document.getElementById('c_critical_level').value = 'Düşük';
   document.getElementById('c_reminder_days').value  = '30';
+  document.getElementById('c_reminder_enabled').checked = true;
   document.getElementById('c_vat_included').checked  = false;
   document.getElementById('c_auto_renewal').checked  = false;
   document.getElementById('responsibleDropdown').style.display = 'none';
+  refreshReminderToggleUI();
 }
 
 function fillContractForm(c) {
@@ -498,6 +511,7 @@ function fillContractForm(c) {
   set('c_critical_level',           c.critical_level);
   set('c_notification_group_id',    c.notification_group_id || '');
   set('c_reminder_days',            c.reminder_days);
+  document.getElementById('c_reminder_enabled').checked = c.reminder_enabled !== false;
   set('c_termination_notice_days',  c.termination_notice_days || '');
   set('c_responsible_person_name',  c.responsible_person_name || '');
   set('c_responsible_person_email', c.responsible_person_email || '');
@@ -508,6 +522,21 @@ function fillContractForm(c) {
   set('c_tags',                     (c.tags || []).join(', '));
   document.getElementById('c_vat_included').checked = !!c.vat_included;
   document.getElementById('c_auto_renewal').checked = !!c.auto_renewal;
+  refreshReminderToggleUI();
+}
+
+function refreshReminderToggleUI() {
+  const enabled = document.getElementById('c_reminder_enabled').checked;
+  const statusEl = document.getElementById('c_reminder_status');
+  const buttonEl = document.getElementById('c_reminder_toggle_btn');
+  if (statusEl) statusEl.textContent = enabled ? 'Hatırlatma Açık' : 'Hatırlatma Kapalı';
+  if (buttonEl) buttonEl.textContent = enabled ? 'Hatırlatma Kapat' : 'Hatırlatma Aç';
+}
+
+function toggleReminderEnabled() {
+  const checkbox = document.getElementById('c_reminder_enabled');
+  checkbox.checked = !checkbox.checked;
+  refreshReminderToggleUI();
 }
 
 /* ── Save ── */
