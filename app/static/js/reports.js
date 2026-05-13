@@ -25,6 +25,11 @@ const REPORT_COL_LABELS = {
   updated_at:              'Güncellenme',
 };
 
+const DATE_COLUMN_KEYS = new Set([
+  'start_date', 'end_date', 'renewal_date', 'created_at', 'updated_at',
+  'Başlangıç', 'Bitiş', 'Yenileme', 'Oluşturulma', 'Güncellenme',
+]);
+
 function colLabel(key) {
   return REPORT_COL_LABELS[key] || key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
 }
@@ -156,6 +161,7 @@ function renderReportTable() {
       if (typeof v === 'boolean') return `<td>${v ? '✓' : '✗'}</td>`;
       if (c === 'status') return `<td>${statusBadge(String(v))}</td>`;
       if (c === 'critical_level') return `<td>${criticalBadge(String(v))}</td>`;
+      if (DATE_COLUMN_KEYS.has(c)) return `<td class="td-nowrap">${escHtml(formatDate(v))}</td>`;
       return `<td>${escHtml(String(v))}</td>`;
     }).join('') + '</tr>'
   ).join('');

@@ -42,10 +42,16 @@ def dashboard_summary(
     base = db.query(Contract).filter(Contract.is_deleted.is_(False))
 
     if q:
-        inst_ids = [i.id for i in db.query(Institution.id).filter(Institution.name.ilike(f'%{q}%')).all()]
+        q_like = f'%{q}%'
+        inst_ids = [i.id for i in db.query(Institution.id).filter(Institution.name.ilike(q_like)).all()]
         base = base.filter(or_(
-            Contract.contract_name.ilike(f'%{q}%'),
-            Contract.contract_number.ilike(f'%{q}%'),
+            Contract.contract_name.ilike(q_like),
+            Contract.contract_number.ilike(q_like),
+            Contract.responsible_person_name.ilike(q_like),
+            Contract.responsible_person_email.ilike(q_like),
+            Contract.responsible_department.ilike(q_like),
+            Contract.description.ilike(q_like),
+            Contract.internal_notes.ilike(q_like),
             Contract.institution_id.in_(inst_ids),
         ))
     if institution_id:
@@ -85,22 +91,24 @@ def dashboard_summary(
     )
     latest = base.order_by(Contract.created_at.desc()).limit(10).all()
 
+    filtered_contracts = base.subquery()
+
     by_status = (
-        db.query(Contract.status, func.count(Contract.id))
-        .filter(Contract.is_deleted.is_(False))
-        .group_by(Contract.status).all()
+        db.query(filtered_contracts.c.status, func.count(filtered_contracts.c.id))
+        .group_by(filtered_contracts.c.status)
+        .all()
     )
     by_contract_type = (
-        db.query(ContractType.name, func.count(Contract.id))
-        .join(Contract, Contract.contract_type_id == ContractType.id)
-        .filter(Contract.is_deleted.is_(False))
-        .group_by(ContractType.name).all()
+        db.query(ContractType.name, func.count(filtered_contracts.c.id))
+        .join(filtered_contracts, filtered_contracts.c.contract_type_id == ContractType.id)
+        .group_by(ContractType.name)
+        .all()
     )
     by_responsible = (
-        db.query(Contract.responsible_person_name, func.count(Contract.id))
-        .filter(Contract.is_deleted.is_(False), Contract.responsible_person_name.is_not(None))
-        .group_by(Contract.responsible_person_name)
-        .order_by(func.count(Contract.id).desc())
+        db.query(filtered_contracts.c.responsible_person_name, func.count(filtered_contracts.c.id))
+        .filter(filtered_contracts.c.responsible_person_name.is_not(None))
+        .group_by(filtered_contracts.c.responsible_person_name)
+        .order_by(func.count(filtered_contracts.c.id).desc())
         .limit(10).all()
     )
 
@@ -113,6 +121,7 @@ def dashboard_summary(
                 'end_date': str(c.end_date),
                 'status': c.status,
                 'critical_level': c.critical_level,
+                'responsible_person_name': c.responsible_person_name,
             }
             for c in nearest
         ],
@@ -122,6 +131,7 @@ def dashboard_summary(
                 'contract_name': c.contract_name,
                 'created_at': str(c.created_at),
                 'status': c.status,
+                'responsible_person_name': c.responsible_person_name,
             }
             for c in latest
         ],

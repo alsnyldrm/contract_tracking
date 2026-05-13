@@ -400,6 +400,29 @@ function goPage(p) {
   loadContracts();
 }
 
+function applyFiltersFromUrl() {
+  const params = new URLSearchParams(location.search);
+  const pairs = [
+    ['q', 'search'],
+    ['institution_id', 'institutionFilter'],
+    ['contract_type_id', 'typeFilter'],
+    ['status', 'statusFilter'],
+    ['critical_level', 'criticalFilter'],
+    ['expiring_days', 'expiringFilter'],
+  ];
+  pairs.forEach(([paramName, elementId]) => {
+    const value = params.get(paramName);
+    if (value === null) return;
+    const el = document.getElementById(elementId);
+    if (el) el.value = value;
+  });
+
+  const sortByParam = params.get('sort_by');
+  const sortDirParam = params.get('sort_dir');
+  if (sortByParam) sortField = sortByParam;
+  if (sortDirParam === 'asc' || sortDirParam === 'desc') sortDir = sortDirParam;
+}
+
 /* ── Modal ── */
 async function openContractModal(id = null) {
   contractEditId = id;
@@ -758,11 +781,7 @@ document.addEventListener('click', e => {
 document.addEventListener('DOMContentLoaded', async () => {
   initContractColumnChooser();
   await loadDropdowns();
-
-  /* URL paramları varsa uygula (dashboard linki) */
-  const params = new URLSearchParams(location.search);
-  if (params.get('sort_by'))    sortField = params.get('sort_by');
-  if (params.get('sort_dir'))   sortDir   = params.get('sort_dir');
+  applyFiltersFromUrl();
 
   await loadContracts();
   updateSortHeaders();

@@ -153,9 +153,15 @@ function escHtml(str) {
 function formatDate(dateStr) {
   if (!dateStr || dateStr === 'None') return '—';
   try {
-    const d = new Date(dateStr);
-    if (isNaN(d.getTime())) return dateStr;
-    return d.toLocaleDateString('tr-TR');
+    const raw = String(dateStr).trim();
+    const isoMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T\s].*)?$/);
+    if (isoMatch) return `${isoMatch[3]}.${isoMatch[2]}.${isoMatch[1]}`;
+    const trMatch = raw.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+    if (trMatch) return raw;
+
+    const d = new Date(raw);
+    if (isNaN(d.getTime())) return raw;
+    return d.toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric' });
   } catch { return dateStr; }
 }
 

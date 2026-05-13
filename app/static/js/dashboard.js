@@ -27,6 +27,36 @@ const STATUS_COLORS = {
   'Yenilendi':    '#4fa8ff',
 };
 
+function buildUrl(path, params = {}) {
+  const qs = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== '') qs.set(key, value);
+  });
+  const suffix = qs.toString();
+  return suffix ? `${path}?${suffix}` : path;
+}
+
+function widgetTarget(key) {
+  const map = {
+    toplam_kurum:       buildUrl('/institutions'),
+    toplam_sozlesme:    buildUrl('/contracts'),
+    aktif_sozlesme:     buildUrl('/contracts', { status: 'Aktif' }),
+    suresi_dolmus:      buildUrl('/contracts', { status: 'Süresi Doldu' }),
+    kritik_sozlesme:    buildUrl('/contracts', { critical_level: 'Kritik' }),
+    bitecek_7:          buildUrl('/contracts', { expiring_days: 7, sort_by: 'end_date', sort_dir: 'asc' }),
+    bitecek_30:         buildUrl('/contracts', { expiring_days: 30, sort_by: 'end_date', sort_dir: 'asc' }),
+    bitecek_60:         buildUrl('/contracts', { expiring_days: 60, sort_by: 'end_date', sort_dir: 'asc' }),
+    bitecek_90:         buildUrl('/contracts', { expiring_days: 90, sort_by: 'end_date', sort_dir: 'asc' }),
+    aylik_yenilenecek:  buildUrl('/reports'),
+    toplam_tutar_tl:    buildUrl('/reports'),
+    taslak_sozlesme:    buildUrl('/contracts', { status: 'Taslak' }),
+    iptal_sozlesme:     buildUrl('/contracts', { status: 'İptal' }),
+    yenilendi_sozlesme: buildUrl('/contracts', { status: 'Yenilendi' }),
+    bu_ay_eklenen:      buildUrl('/contracts', { sort_by: 'created_at', sort_dir: 'desc' }),
+  };
+  return map[key] || '/contracts';
+}
+
 function getDashFilters() {
   return {
     q:            document.getElementById('dashSearch')?.value     || '',
@@ -96,8 +126,12 @@ function renderWidgets(widgets) {
     } else {
       display = Number(val).toLocaleString('tr-TR');
     }
+    const href = widgetTarget(def.key);
     return `
-      <div class="widget widget-${def.color}">
+      <div class="widget widget-${def.color}" role="button" tabindex="0"
+           onclick="window.location.href='${escHtml(href)}'"
+           onkeydown="if(event.key==='Enter' || event.key===' '){event.preventDefault();window.location.href='${escHtml(href)}'}"
+           style="cursor:pointer">
         <div class="widget-icon">${def.icon}</div>
         <div class="label">${def.label}</div>
         <div class="value">${display}</div>
@@ -109,14 +143,15 @@ function renderNearestTable(rows) {
   const tbody = document.querySelector('#nearestTable tbody');
   if (!tbody) return;
   if (!rows || rows.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:24px">Yaklaşan sözleşme yok</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:24px">Yaklaşan sözleşme yok</td></tr>';
     return;
   }
   tbody.innerHTML = rows.map(r => `
     <tr>
       <td class="td-truncate" style="max-width:180px" title="${escHtml(r.contract_name)}">
-        <a href="/contracts" style="color:var(--primary);text-decoration:none;font-weight:500">${escHtml(r.contract_name)}</a>
+        <a href="/contracts?q=${encodeURIComponent(r.contract_name || '')}" style="color:var(--primary);text-decoration:none;font-weight:500">${escHtml(r.contract_name)}</a>
       </td>
+      <td class="td-truncate" style="max-width:160px" title="${escHtml(r.responsible_person_name || '')}">${escHtml(r.responsible_person_name || '—')}</td>
       <td class="td-nowrap">${formatDate(r.end_date)}</td>
       <td>${statusBadge(r.status)}</td>
       <td>${criticalBadge(r.critical_level || 'Düşük')}</td>
@@ -127,14 +162,15 @@ function renderLatestTable(rows) {
   const tbody = document.querySelector('#latestTable tbody');
   if (!tbody) return;
   if (!rows || rows.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--muted);padding:24px">Henüz sözleşme yok</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:24px">Henüz sözleşme yok</td></tr>';
     return;
   }
   tbody.innerHTML = rows.map(r => `
     <tr>
       <td class="td-truncate" style="max-width:200px" title="${escHtml(r.contract_name)}">
-        <a href="/contracts" style="color:var(--primary);text-decoration:none;font-weight:500">${escHtml(r.contract_name)}</a>
+        <a href="/contracts?q=${encodeURIComponent(r.contract_name || '')}" style="color:var(--primary);text-decoration:none;font-weight:500">${escHtml(r.contract_name)}</a>
       </td>
+      <td class="td-truncate" style="max-width:160px" title="${escHtml(r.responsible_person_name || '')}">${escHtml(r.responsible_person_name || '—')}</td>
       <td class="td-nowrap td-muted" style="font-size:12px">${formatDate(r.created_at)}</td>
       <td>${statusBadge(r.status)}</td>
     </tr>`).join('');

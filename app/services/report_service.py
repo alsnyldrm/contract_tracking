@@ -26,6 +26,23 @@ REPORT_DEFS = {
 }
 
 
+def _parse_iso_date(value: str | None) -> date | None:
+    if not value:
+        return None
+    try:
+        return date.fromisoformat(value)
+    except ValueError:
+        return None
+
+
+def _format_tr_date(value: date | datetime | None) -> str:
+    if not value:
+        return ''
+    if isinstance(value, datetime):
+        value = value.date()
+    return value.strftime('%d.%m.%Y')
+
+
 def _base_rows(db: Session):
     rows = (
         db.query(Contract, Institution)
@@ -39,9 +56,11 @@ def _base_rows(db: Session):
 def build_report_data(db: Session, report_code: str, filters: dict | None = None) -> list[dict]:
     filters = filters or {}
     today = date.today()
+    start_date_filter = _parse_iso_date(filters.get('start_date'))
+    end_date_filter = _parse_iso_date(filters.get('end_date'))
     rows = _base_rows(db)
 
-    data = []
+    data_with_sort_keys: list[tuple[date, date, str, dict]] = []
     for contract, institution in rows:
         if report_code == 'expiring_contracts' and (not contract.end_date or (contract.end_date - today).days > 90):
             continue
@@ -60,21 +79,28 @@ def build_report_data(db: Session, report_code: str, filters: dict | None = None
             continue
         if filters.get('status') and filters['status'] != contract.status:
             continue
+        if start_date_filter and (not contract.start_date or contract.start_date < start_date_filter):
+            continue
+        if end_date_filter and (not contract.end_date or contract.end_date > end_date_filter):
+            continue
 
-        data.append(
-            {
-                'Sözleşme No': contract.contract_number,
-                'Kurum': institution.name,
-                'Sözleşme Adı': contract.contract_name,
-                'Durum': contract.status,
-                'Kritik Seviye': contract.critical_level,
-                'Başlangıç': str(contract.start_date or ''),
-                'Bitiş': str(contract.end_date or ''),
-                'Tutar': float(contract.amount or 0),
-                'Sorumlu': contract.responsible_person_name or '',
-            }
-        )
-    return data
+        row = {
+            'Sözleşme No': contract.contract_number,
+            'Kurum': institution.name,
+            'Sözleşme Adı': contract.contract_name,
+            'Durum': contract.status,
+            'Kritik Seviye': contract.critical_level,
+            'Başlangıç': _format_tr_date(contract.start_date),
+            'Bitiş': _format_tr_date(contract.end_date),
+            'Tutar': float(contract.amount or 0),
+            'Sorumlu': contract.responsible_person_name or '',
+        }
+        sort_start = contract.start_date or date.max
+        sort_end = contract.end_date or date.max
+        data_with_sort_keys.append((sort_start, sort_end, contract.contract_number or '', row))
+
+    data_with_sort_keys.sort(key=lambda x: (x[0], x[1], x[2]))
+    return [x[3] for x in data_with_sort_keys]
 
 
 def export_csv_utf8_bom(rows: list[dict]) -> bytes:
